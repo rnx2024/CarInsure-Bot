@@ -3,7 +3,6 @@ import sqlite3
 from typing import List, Tuple
 import streamlit as st
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
-from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
@@ -113,9 +112,9 @@ def load_history(email: str):
     history = []
     for role, msg in rows:
         if role == "user":
-            history.append(HumanMessage(msg))
+            history.append(HumanMessage(content=msg))
         else:
-            history.append(AIMessage(msg))
+            history.append(AIMessage(content=msg))
     return history
 
 # ---------- Session State ----------
@@ -193,19 +192,18 @@ if query:
         st.stop()
 
     retriever = st.session_state.index.as_retriever()
-
     chat_engine = CondenseQuestionChatEngine.from_defaults(
-    retriever=retriever,
-    llm=llm,
-    chat_mode="condense_question",
-    verbose=False,
+        retriever=retriever,
+        llm=llm,
+        chat_mode="condense_question",
+        verbose=False,
     )
 
     response = chat_engine.chat(query)
     answer = str(response)
 
-    st.session_state.chat_history.append(HumanMessage(query))
-    st.session_state.chat_history.append(AIMessage(answer))
+    st.session_state.chat_history.append(HumanMessage(content=query))
+    st.session_state.chat_history.append(AIMessage(content=answer))
 
     save_message(st.session_state.user_email, "user", query)
     save_message(st.session_state.user_email, "assistant", answer)
