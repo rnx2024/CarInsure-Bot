@@ -193,14 +193,12 @@ if query:
         st.stop()
 
     retriever = st.session_state.index.as_retriever()
-    query_engine = RetrieverQueryEngine(retriever=retriever, llm=llm)
 
     chat_engine = CondenseQuestionChatEngine.from_defaults(
-        retriever=retriever,
-        query_engine=query_engine,
-        llm=llm,
-        chat_mode="condense_question",
-        verbose=False,
+    retriever=retriever,
+    llm=llm,
+    chat_mode="condense_question",
+    verbose=False,
     )
 
     response = chat_engine.chat(query)
