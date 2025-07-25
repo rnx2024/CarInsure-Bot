@@ -1,0 +1,18 @@
+[server]
+headless = true
+runOnSave = true
+enableCORS = false
+enableXsrfProtection = false
+
+[theme]
+base = "light"
+primaryColor = "#2B6CB0"                # Bold Blue (Modern, Trustworthy)
+backgroundColor = "#F0F4F8"             # Soft Cool Gray-Blue
+secondaryBackgroundColor = "#FFFFFF"   # Clean White for card contrast
+textColor = "#1A202C"                   # Dark Charcoal Text
+font = "sans serif"                     # Clean UI-friendly font
+
+[client]
+toolbarMode = "minimal"
+showSidebarNavigation = false
+showErrorDetails = false
