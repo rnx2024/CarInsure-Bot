@@ -2,7 +2,8 @@ import os
 import sqlite3
 from typing import List, Tuple
 import streamlit as st
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
@@ -191,8 +192,12 @@ if query:
         st.warning("Please repeat your question.")
         st.stop()
 
+    retriever = st.session_state.index.as_retriever()
+    query_engine = RetrieverQueryEngine(retriever=retriever, llm=llm)
+
     chat_engine = CondenseQuestionChatEngine.from_defaults(
-        st.session_state.index,
+        retriever=retriever,
+        query_engine=query_engine,
         llm=llm,
         chat_mode="condense_question",
         verbose=False,
