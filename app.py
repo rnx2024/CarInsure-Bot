@@ -3,6 +3,7 @@ import sqlite3
 from typing import List, Tuple
 import streamlit as st
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
@@ -160,7 +161,9 @@ with st.spinner("📚 Indexing documents..."):
     embed_model = OpenAIEmbedding(api_key=openai_key)
     llm = OpenAI(model="gpt-4o", api_key=openai_key)
     index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
+    query_engine = index.as_query_engine(llm=llm)
     st.session_state.index = index
+    st.session_state.query_engine = query_engine
 
 # ---------- Greet User ----------
 if st.session_state.user_registered and not st.session_state.greeted:
@@ -191,9 +194,8 @@ if query:
         st.warning("Please repeat your question.")
         st.stop()
 
-    retriever = st.session_state.index.as_retriever()
     chat_engine = CondenseQuestionChatEngine.from_defaults(
-        retriever=retriever,
+        query_engine=st.session_state.query_engine,
         llm=llm,
         chat_mode="condense_question",
         verbose=False,
