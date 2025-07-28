@@ -1,69 +1,41 @@
 import os
 import sqlite3
-import streamlit as st
 from typing import List, Tuple
-from datetime import datetime
-from langdetect import detect
-from langchain.schema import HumanMessage, AIMessage
+import streamlit as st
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
+from langchain.schema import HumanMessage, AIMessage
+from langdetect import detect
+from datetime import datetime
 import requests
 import tempfile
 import base64
 from streamlit_mic_recorder import mic_recorder
-import openai
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
 SUPPORTED_EXTS: Tuple[str, ...] = (".txt", ".md", ".pdf")
 DB_PATH = "users.db"
 
-st.set_page_config(page_title="Insurance Assistant", page_icon="🚗")
-st.markdown("""
-<style>
-    html, body, [class*="css"] {
-        font-family: 'Rubik', sans-serif;
-        color: #3399FF;
-    }
-    .block-container { max-width: 900px; margin: auto; padding-top: 2rem; }
-    .stChatInputContainer textarea { max-width: 600px !important; margin: auto; display: block; }
-    .stButton>button { background-color: #e6f2ff !important; color: #004080 !important; border-radius: 8px; }
-    .stChatMessage, .stMarkdown { color: #3399FF !important; }
-    .stChatMessageContent { font-family: 'Rubik', sans-serif; max-width: 800px; margin: auto; }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
+st.markdown("""<style>
+    /* Your CSS here */
+</style>""", unsafe_allow_html=True)
 
-st.markdown("""
-# 🚗🏎️ CarInsure Bot
+st.markdown("""# 🚗 CarInsure Bot  
 Ask about the policy coverage, exclusions, or any clause in the documents.
 """)
 
 openai_key = st.secrets["openai_api_key"]
-deepgram_key = st.secrets["deepgram_api_key"]
 
 # ---------- SQLite Setup ----------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            car TEXT NOT NULL,
-            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT NOT NULL,
-            role TEXT CHECK(role IN ('user', 'assistant')) NOT NULL,
-            message TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    conn.execute("""CREATE TABLE IF NOT EXISTS users (...)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS conversations (...)""")
     conn.commit()
     conn.close()
 
@@ -73,7 +45,11 @@ init_db()
 def list_local_files(folder: str, exts: Tuple[str, ...]) -> List[str]:
     if not os.path.isdir(folder):
         return []
-    return sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts))
+    return sorted(
+        os.path.join(folder, f)
+        for f in os.listdir(folder)
+        if f.lower().endswith(exts)
+    )
 
 def save_message(email: str, role: str, message: str):
     conn = sqlite3.connect(DB_PATH)
@@ -86,39 +62,23 @@ def load_history(email: str):
     cursor = conn.execute("SELECT role, message FROM conversations WHERE user_email = ? ORDER BY timestamp ASC", (email,))
     rows = cursor.fetchall()
     conn.close()
-    return [HumanMessage(content=msg) if role == "user" else AIMessage(content=msg) for role, msg in rows]
-
-def transcribe_with_deepgram(audio_path):
-    with open(audio_path, "rb") as f:
-        response = requests.post(
-            "https://api.deepgram.com/v1/listen",
-            headers={"Authorization": f"Token {deepgram_key}"},
-            files={"audio": f},
-        )
-    data = response.json()
-    st.write(data)  # Log the response to see what is returned from Deepgram
-    try:
-        return data["results"]["channels"][0]["alternatives"][0]["transcript"]
-    except Exception:
-        return ""
-
-def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
-    openai.api_key = openai_key
-    speech_response = openai.Audio.create(model=model, voice=voice, input=text)  # Make sure to use correct method
-    audio_url = speech_response['audio_url']  # Assuming OpenAI returns a URL for the audio file
-    audio_data = requests.get(audio_url).content  # Fetch the audio content from the URL
-    b64 = base64.b64encode(audio_data).decode()
-    st.markdown(f"""
-    <audio autoplay controls>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
-    </audio>
-    """, unsafe_allow_html=True)
-
+    history = []
+    for role, msg in rows:
+        if role == "user":
+            history.append(HumanMessage(content=msg))
+        else:
+            history.append(AIMessage(content=msg))
+    return history
 
 # ---------- Session State ----------
-for k in ["index", "chat_history", "user_registered", "greeted"]:
-    if k not in st.session_state:
-        st.session_state[k] = [] if "history" in k else False
+if "index" not in st.session_state:
+    st.session_state.index = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "user_registered" not in st.session_state:
+    st.session_state.user_registered = False
+if "greeted" not in st.session_state:
+    st.session_state.greeted = False
 
 # ---------- User Info Collection ----------
 if not st.session_state.user_registered:
@@ -127,6 +87,7 @@ if not st.session_state.user_registered:
         email = st.text_input("Your Email")
         car = st.text_input("Type of Car")
         submitted = st.form_submit_button("Start Chat")
+
     if submitted and name and email and car:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("INSERT INTO users (name, email, car) VALUES (?, ?, ?)", (name, email, car))
@@ -152,8 +113,9 @@ with st.spinner("📚 Indexing documents..."):
     embed_model = OpenAIEmbedding(api_key=openai_key)
     llm = OpenAI(model="gpt-4o", api_key=openai_key)
     index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
+    query_engine = index.as_query_engine(llm=llm)
     st.session_state.index = index
-    st.session_state.query_engine = index.as_query_engine(llm=llm)
+    st.session_state.query_engine = query_engine
 
 # ---------- Greet User ----------
 if st.session_state.user_registered and not st.session_state.greeted:
@@ -161,17 +123,14 @@ if st.session_state.user_registered and not st.session_state.greeted:
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Voice Mode ----------
-# ---------- Voice Mode ----------
-query = None
-
-# Toggle for enabling voice input
+# ---------- Voice Mode Toggle ----------
 voice_mode = st.toggle("🎤 Voice Mode")
 
+# ---------- Handle Voice Input ----------
+query = None
 if voice_mode:
     audio_data = mic_recorder(key="mic")
     if audio_data is not None:
-        # Add this part to handle the audio format
         if isinstance(audio_data, dict) and "bytes" in audio_data:
             audio_bytes = audio_data["bytes"]
         elif isinstance(audio_data, bytes):
@@ -180,12 +139,12 @@ if voice_mode:
             st.error("Unsupported audio format received.")
             st.stop()
 
-        # Process the audio (save it to a temporary file)
+        # Save audio data to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_bytes)
             audio_path = tmpfile.name
 
-        # Transcribe the audio file
+        # Transcribe using Deepgram
         query = transcribe_with_deepgram(audio_path)
         os.remove(audio_path)
 
@@ -194,19 +153,18 @@ if voice_mode:
         else:
             st.warning("Transcription failed or returned empty result.")
 
-
-# Text fallback
+# ---------- Text Input Fallback ----------
 if not query:
     query = st.chat_input("Ask your question about the insurance policy documents:")
 
-# Query Processing
+# ---------- Query Processing ----------
 if query:
     try:
         if detect(query) != "en":
             st.warning("I can only respond in English.")
             st.stop()
     except Exception:
-        st.warning("Could not detect language.")
+        st.warning("Please repeat your question.")
         st.stop()
 
     chat_engine = CondenseQuestionChatEngine.from_defaults(
@@ -215,19 +173,17 @@ if query:
         chat_mode="condense_question",
         verbose=False,
     )
+
     response = chat_engine.chat(query)
     answer = str(response)
 
     st.session_state.chat_history.append(HumanMessage(content=query))
     st.session_state.chat_history.append(AIMessage(content=answer))
+
     save_message(st.session_state.user_email, "user", query)
     save_message(st.session_state.user_email, "assistant", answer)
 
-    with st.chat_message("assistant", avatar="🚗"):
-        st.markdown(answer)
-    speak_with_openai_tts(answer)
-
-# Display Chat History
+# ---------- Display Chat History ----------
 for msg in st.session_state.chat_history:
     if isinstance(msg, HumanMessage):
         with st.chat_message("user", avatar="👤"):
