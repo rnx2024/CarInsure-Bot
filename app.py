@@ -10,6 +10,11 @@ from llama_index.llms.openai import OpenAI
 from langchain.schema import HumanMessage, AIMessage
 from langdetect import detect
 from datetime import datetime
+from deepgram import Deepgram
+import openai
+import base64
+import tempfile
+from st_audiorec import st_audiorec
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
@@ -61,9 +66,10 @@ st.markdown("""
 Ask about the policy coverage, exclusions, or any clause in the documents.
 """)
 
-openai_key = st.secrets["openai_api_key"]
+openai_key = st.secrets["api_keys"]["openai_api_key"]
+deepgram_key = st.secrets["api_keys"]["deepgram_api_key"]
 
-# ---------- SQLite Setup ----------
+# ---------- DB Setup ----------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute("""
@@ -118,6 +124,34 @@ def load_history(email: str):
             history.append(AIMessage(content=msg))
     return history
 
+def transcribe_with_deepgram(audio_path: str) -> str:
+    dg_client = Deepgram(deepgram_key)
+    with open(audio_path, "rb") as audio:
+        source = {"buffer": audio, "mimetype": "audio/wav"}
+        response = dg_client.transcription.sync_prerecorded(source, {"punctuate": True})
+    return response["results"]["channels"][0]["alternatives"][0]["transcript"]
+
+def speak_with_openai_tts(text: str):
+    openai.api_key = openai_key
+    speech = openai.audio.speech.create(
+        model="tts-1",
+        voice="nova",
+        input=text
+    )
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp.write(speech.read())
+        audio_path = tmp.name
+    with open(audio_path, "rb") as f:
+        audio_bytes = f.read()
+    b64 = base64.b64encode(audio_bytes).decode()
+    audio_html = f"""
+    <audio autoplay controls>
+    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
+    os.remove(audio_path)
+
 # ---------- Session State ----------
 if "index" not in st.session_state:
     st.session_state.index = None
@@ -128,7 +162,7 @@ if "user_registered" not in st.session_state:
 if "greeted" not in st.session_state:
     st.session_state.greeted = False
 
-# ---------- User Info Collection ----------
+# ---------- User Info ----------
 if not st.session_state.user_registered:
     with st.form("user_form"):
         name = st.text_input("Your Name")
@@ -149,7 +183,7 @@ if not st.session_state.user_registered:
     else:
         st.stop()
 
-# ---------- Load Documents and Create Index ----------
+# ---------- Load and Index Docs ----------
 files = list_local_files(DOCS_DIR, SUPPORTED_EXTS)
 if not files:
     st.error(f"No documents found in '{DOCS_DIR}'.")
@@ -165,32 +199,33 @@ with st.spinner("📚 Indexing documents..."):
     st.session_state.index = index
     st.session_state.query_engine = query_engine
 
-# ---------- Greet User ----------
+# ---------- Greet ----------
 if st.session_state.user_registered and not st.session_state.greeted:
     with st.chat_message("assistant", avatar="🚗"):
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Quick Questions ----------
-query = st.chat_input("Ask your question about the insurance policy documents:")
+# ---------- Audio Input ----------
+st.markdown("### 🎤 Ask by Voice")
+wav_audio_data = st_audiorec()
 
-with st.container():
-    st.markdown("**Quick Questions:**")
-    cols = st.columns(3)
-    if cols[0].button("📄 What does this policy cover?"):
-        query = "What does this policy cover?"
-    if cols[1].button("⚠️ What are the exclusions?"):
-        query = "What are the exclusions in this policy?"
-    if cols[2].button("❓ How do I make a claim?"):
-        query = "How do I make a claim under this policy?"
+if wav_audio_data is not None:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
+        tmp.write(wav_audio_data)
+        tmp_path = tmp.name
+    query = transcribe_with_deepgram(tmp_path)
+    st.markdown(f"**You asked:** {query}")
+    os.remove(tmp_path)
+else:
+    query = st.chat_input("Ask your question about the insurance policy documents:")
 
-# ---------- Chat Logic ----------
+# ---------- Ask + Respond ----------
 if query:
     try:
         if detect(query) != "en":
             st.warning("I can only respond in English.")
             st.stop()
-    except Exception:
+    except:
         st.warning("Please repeat your question.")
         st.stop()
 
@@ -210,7 +245,9 @@ if query:
     save_message(st.session_state.user_email, "user", query)
     save_message(st.session_state.user_email, "assistant", answer)
 
-# ---------- Display Chat History ----------
+    speak_with_openai_tts(answer)
+
+# ---------- Chat History ----------
 for msg in st.session_state.chat_history:
     if isinstance(msg, HumanMessage):
         with st.chat_message("user", avatar="👤"):
