@@ -13,7 +13,7 @@ import requests
 import tempfile
 import base64
 from streamlit_mic_recorder import mic_recorder
-import openai
+from openai import OpenAI
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
@@ -185,11 +185,16 @@ if st.session_state.user_registered and not st.session_state.greeted:
 
 # ---------- Voice Mode ----------
 query = None
+
+# Toggle for enabling voice input
 voice_mode = st.toggle("🎤 Voice Mode")
+
 if voice_mode:
+    # Record audio via microphone
     audio_data = mic_recorder(key="mic")
+
     if audio_data is not None:
-        # Extract bytes from dict if necessary
+        # Extract bytes from dict if returned that way
         if isinstance(audio_data, dict) and "bytes" in audio_data:
             audio_bytes = audio_data["bytes"]
         elif isinstance(audio_data, bytes):
@@ -198,20 +203,58 @@ if voice_mode:
             st.error("Unsupported audio format received.")
             st.stop()
 
-        # Write to temporary file
+        # Save audio to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_bytes)
             audio_path = tmpfile.name
 
-        # Transcribe using Deepgram
+        # Transcribe the recorded audio to text using Deepgram
         query = transcribe_with_deepgram(audio_path)
-        os.remove(audio_path)
+        os.remove(audio_path)  # Clean up temp file
 
+        # Display transcribed text
         if query:
             st.markdown(f"**You said:** {query}")
         else:
             st.warning("Transcription failed or returned empty result.")
 
+# Standard chat input fallback (text)
+if not query:
+    query = st.chat_input("Ask your question about the insurance policy documents:")
+
+# Proceed if a query was captured (from voice or text)
+if query:
+    try:
+        if detect(query) != "en":
+            st.warning("I can only respond in English.")
+            st.stop()
+    except Exception:
+        st.warning("Could not detect language.")
+        st.stop()
+
+    # Retrieve and respond using LlamaIndex chat engine
+    chat_engine = CondenseQuestionChatEngine.from_defaults(
+        query_engine=st.session_state.query_engine,
+        llm=llm,
+        chat_mode="condense_question",
+        verbose=False,
+    )
+
+    response = chat_engine.chat(query)
+    answer = str(response)
+
+    # Save conversation to DB and session state
+    st.session_state.chat_history.append(HumanMessage(content=query))
+    st.session_state.chat_history.append(AIMessage(content=answer))
+    save_message(st.session_state.user_email, "user", query)
+    save_message(st.session_state.user_email, "assistant", answer)
+
+    # Display assistant response
+    with st.chat_message("assistant", avatar="🚗"):
+        st.markdown(answer)
+
+    # Convert answer to speech via OpenAI TTS and play it back
+    speak_with_openai_tts(answer, api_key=openai_key)
             
 # ---------- Chat Input ----------
 if not query:
@@ -226,33 +269,7 @@ if not query:
         if cols[2].button("❓ How do I make a claim?"):
             query = "How do I make a claim under this policy?"
 
-# ---------- Chat Logic ----------
-if query:
-    try:
-        if detect(query) != "en":
-            st.warning("I can only respond in English.")
-            st.stop()
-    except Exception:
-        st.warning("Please repeat your question.")
-        st.stop()
 
-    chat_engine = CondenseQuestionChatEngine.from_defaults(
-        query_engine=st.session_state.query_engine,
-        llm=llm,
-        chat_mode="condense_question",
-        verbose=False,
-    )
-
-    response = chat_engine.chat(query)
-    answer = str(response)
-
-    st.session_state.chat_history.append(HumanMessage(content=query))
-    st.session_state.chat_history.append(AIMessage(content=answer))
-
-    save_message(st.session_state.user_email, "user", query)
-    save_message(st.session_state.user_email, "assistant", answer)
-
-    speak_with_openai_tts(answer)
 
 # ---------- Display Chat History ----------
 for msg in st.session_state.chat_history:
