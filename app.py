@@ -62,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-# \ud83d\ude97 CarInsure Bot  
+# 🚗 CarInsure Bot  
 Ask about the policy coverage, exclusions, or any clause in the documents.
 """)
 
