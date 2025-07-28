@@ -13,7 +13,7 @@ import requests
 import tempfile
 import base64
 from streamlit_mic_recorder import mic_recorder
-from openai import OpenAI
+import openai
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
@@ -95,11 +95,11 @@ def transcribe_with_deepgram(audio_path):
             headers={"Authorization": f"Token {deepgram_key}"},
             files={"audio": f},
         )
-        try:
-            return response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
-        except Exception:
-            st.error("Deepgram transcription failed.")
-            return ""
+    data = response.json()
+    try:
+        return data["results"]["channels"][0]["alternatives"][0]["transcript"]
+    except Exception:
+        return ""
 
 def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     openai.api_key = openai_key
@@ -165,7 +165,10 @@ if st.session_state.user_registered and not st.session_state.greeted:
 
 # ---------- Voice Mode ----------
 query = None
+
+# Toggle for enabling voice input
 voice_mode = st.toggle("🎤 Voice Mode")
+
 if voice_mode:
     audio_data = mic_recorder(key="mic")
     if audio_data is not None:
@@ -189,9 +192,11 @@ if voice_mode:
         else:
             st.warning("Transcription failed or returned empty result.")
 
+# Text fallback
 if not query:
     query = st.chat_input("Ask your question about the insurance policy documents:")
 
+# Query Processing
 if query:
     try:
         if detect(query) != "en":
@@ -217,22 +222,9 @@ if query:
 
     with st.chat_message("assistant", avatar="🚗"):
         st.markdown(answer)
-
     speak_with_openai_tts(answer)
 
-# ---------- Quick Questions ----------
-if not query:
-    with st.container():
-        st.markdown("**Quick Questions:**")
-        cols = st.columns(3)
-        if cols[0].button("📄 What does this policy cover?"):
-            query = "What does this policy cover?"
-        if cols[1].button("⚠️ What are the exclusions?"):
-            query = "What are the exclusions in this policy?"
-        if cols[2].button("❓ How do I make a claim?"):
-            query = "How do I make a claim under this policy?"
-
-# ---------- Display Chat History ----------
+# Display Chat History
 for msg in st.session_state.chat_history:
     if isinstance(msg, HumanMessage):
         with st.chat_message("user", avatar="👤"):
