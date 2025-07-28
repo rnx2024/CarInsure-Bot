@@ -7,3 +7,4 @@ tiktoken>=0.5.1
 python-dotenv>=1.0.1
 deepgram-sdk 
 streamlit-audiorec 
+streamlit_mic_recorder
