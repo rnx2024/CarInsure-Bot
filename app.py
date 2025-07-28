@@ -21,7 +21,7 @@ DOCS_DIR = "./docs"
 SUPPORTED_EXTS: Tuple[str, ...] = (".txt", ".md", ".pdf")
 DB_PATH = "users.db"
 
-st.set_page_config(page_title="Insurance Assistant", page_icon="\ud83d\ude97", layout="wide")
+st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik&display=swap');
