@@ -21,7 +21,7 @@ DOCS_DIR = "./docs"
 SUPPORTED_EXTS: Tuple[str, ...] = (".txt", ".md", ".pdf")
 DB_PATH = "users.db"
 
-st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
+st.set_page_config(page_title="Insurance Assistant", page_icon="\ud83d\ude97", layout="wide")
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik&display=swap');
@@ -62,7 +62,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-# 🚗 CarInsure Bot  
+# \ud83d\ude97 CarInsure Bot  
 Ask about the policy coverage, exclusions, or any clause in the documents.
 """)
 
@@ -192,7 +192,7 @@ if not files:
     st.error(f"No documents found in '{DOCS_DIR}'.")
     st.stop()
 
-with st.spinner("📚 Indexing documents..."):
+with st.spinner("\ud83d\udcda Indexing documents..."):
     reader = SimpleDirectoryReader(DOCS_DIR)
     documents = reader.load_data()
     embed_model = OpenAIEmbedding(api_key=openai_key)
@@ -204,13 +204,13 @@ with st.spinner("📚 Indexing documents..."):
 
 # ---------- Greet User ----------
 if st.session_state.user_registered and not st.session_state.greeted:
-    with st.chat_message("assistant", avatar="🚗"):
+    with st.chat_message("assistant", avatar="\ud83d\ude97"):
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
 # ---------- Voice Mode (Live Recording) ----------
 query = None
-voice_mode = st.toggle("🎙️ Voice Mode")
+voice_mode = st.toggle("\ud83c\udfa4 Voice Mode")
 if voice_mode:
     audio = mic_recorder(key="mic")
     if audio is not None:
@@ -228,11 +228,11 @@ if not query:
     with st.container():
         st.markdown("**Quick Questions:**")
         cols = st.columns(3)
-        if cols[0].button("📄 What does this policy cover?"):
+        if cols[0].button("\ud83d\udcc4 What does this policy cover?"):
             query = "What does this policy cover?"
-        if cols[1].button("⚠️ What are the exclusions?"):
+        if cols[1].button("\u26a0\ufe0f What are the exclusions?"):
             query = "What are the exclusions in this policy?"
-        if cols[2].button("❓ How do I make a claim?"):
+        if cols[2].button("\u2753 How do I make a claim?"):
             query = "How do I make a claim under this policy?"
 
 # ---------- Chat Logic ----------
@@ -266,8 +266,8 @@ if query:
 # ---------- Display Chat History ----------
 for msg in st.session_state.chat_history:
     if isinstance(msg, HumanMessage):
-        with st.chat_message("user", avatar="👤"):
+        with st.chat_message("user", avatar="\ud83d\udc64"):
             st.markdown(msg.content)
     elif isinstance(msg, AIMessage):
-        with st.chat_message("assistant", avatar="🚗"):
+        with st.chat_message("assistant", avatar="\ud83d\ude97"):
             st.markdown(msg.content)
