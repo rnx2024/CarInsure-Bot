@@ -96,6 +96,7 @@ def transcribe_with_deepgram(audio_path):
             files={"audio": f},
         )
     data = response.json()
+    st.write(data)  # Log the response to see what is returned from Deepgram
     try:
         return data["results"]["channels"][0]["alternatives"][0]["transcript"]
     except Exception:
@@ -103,19 +104,16 @@ def transcribe_with_deepgram(audio_path):
 
 def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     openai.api_key = openai_key
-    speech_response = openai.audio.speech.create(model=model, voice=voice, input=text)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
-        tmpfile.write(speech_response.read())
-        audio_path = tmpfile.name
-    with open(audio_path, "rb") as f:
-        audio_bytes = f.read()
-    b64 = base64.b64encode(audio_bytes).decode()
+    speech_response = openai.Audio.create(model=model, voice=voice, input=text)  # Make sure to use correct method
+    audio_url = speech_response['audio_url']  # Assuming OpenAI returns a URL for the audio file
+    audio_data = requests.get(audio_url).content  # Fetch the audio content from the URL
+    b64 = base64.b64encode(audio_data).decode()
     st.markdown(f"""
     <audio autoplay controls>
-    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
     </audio>
     """, unsafe_allow_html=True)
-    os.remove(audio_path)
+
 
 # ---------- Session State ----------
 for k in ["index", "chat_history", "user_registered", "greeted"]:
