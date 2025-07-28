@@ -162,6 +162,7 @@ if st.session_state.user_registered and not st.session_state.greeted:
     st.session_state.greeted = True
 
 # ---------- Voice Mode ----------
+# ---------- Voice Mode ----------
 query = None
 
 # Toggle for enabling voice input
@@ -170,6 +171,7 @@ voice_mode = st.toggle("🎤 Voice Mode")
 if voice_mode:
     audio_data = mic_recorder(key="mic")
     if audio_data is not None:
+        # Add this part to handle the audio format
         if isinstance(audio_data, dict) and "bytes" in audio_data:
             audio_bytes = audio_data["bytes"]
         elif isinstance(audio_data, bytes):
@@ -178,10 +180,12 @@ if voice_mode:
             st.error("Unsupported audio format received.")
             st.stop()
 
+        # Process the audio (save it to a temporary file)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_bytes)
             audio_path = tmpfile.name
 
+        # Transcribe the audio file
         query = transcribe_with_deepgram(audio_path)
         os.remove(audio_path)
 
@@ -189,6 +193,7 @@ if voice_mode:
             st.markdown(f"**You said:** {query}")
         else:
             st.warning("Transcription failed or returned empty result.")
+
 
 # Text fallback
 if not query:
