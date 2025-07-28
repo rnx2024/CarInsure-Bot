@@ -95,7 +95,11 @@ def transcribe_with_deepgram(audio_path):
             headers={"Authorization": f"Token {deepgram_key}"},
             files={"audio": f},
         )
-        return response.json().get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
+        try:
+            return response.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
+        except Exception:
+            st.error("Deepgram transcription failed.")
+            return ""
 
 def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     openai.api_key = openai_key
@@ -112,30 +116,6 @@ def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     </audio>
     """, unsafe_allow_html=True)
     os.remove(audio_path)
-
-# Add this function near the top of your script
-
-def transcribe_with_deepgram(audio_path):
-    """
-    Sends a recorded audio file to Deepgram and returns the transcribed text.
-    """
-    import requests
-    deepgram_key = st.secrets["deepgram_api_key"]  # make sure it's in your .streamlit/secrets.toml
-
-    with open(audio_path, "rb") as f:
-        response = requests.post(
-            "https://api.deepgram.com/v1/listen",
-            headers={"Authorization": f"Token {deepgram_key}"},
-            files={"audio": f},
-        )
-        data = response.json()
-
-    try:
-        return data["results"]["channels"][0]["alternatives"][0]["transcript"]
-    except Exception as e:
-        st.error("Deepgram transcription failed.")
-        return ""
-
 
 # ---------- Session State ----------
 for k in ["index", "chat_history", "user_registered", "greeted"]:
@@ -185,16 +165,10 @@ if st.session_state.user_registered and not st.session_state.greeted:
 
 # ---------- Voice Mode ----------
 query = None
-
-# Toggle for enabling voice input
 voice_mode = st.toggle("🎤 Voice Mode")
-
 if voice_mode:
-    # Record audio via microphone
     audio_data = mic_recorder(key="mic")
-
     if audio_data is not None:
-        # Extract bytes from dict if returned that way
         if isinstance(audio_data, dict) and "bytes" in audio_data:
             audio_bytes = audio_data["bytes"]
         elif isinstance(audio_data, bytes):
@@ -203,26 +177,21 @@ if voice_mode:
             st.error("Unsupported audio format received.")
             st.stop()
 
-        # Save audio to a temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
             tmpfile.write(audio_bytes)
             audio_path = tmpfile.name
 
-        # Transcribe the recorded audio to text using Deepgram
         query = transcribe_with_deepgram(audio_path)
-        os.remove(audio_path)  # Clean up temp file
+        os.remove(audio_path)
 
-        # Display transcribed text
         if query:
             st.markdown(f"**You said:** {query}")
         else:
             st.warning("Transcription failed or returned empty result.")
 
-# Standard chat input fallback (text)
 if not query:
     query = st.chat_input("Ask your question about the insurance policy documents:")
 
-# Proceed if a query was captured (from voice or text)
 if query:
     try:
         if detect(query) != "en":
@@ -232,33 +201,27 @@ if query:
         st.warning("Could not detect language.")
         st.stop()
 
-    # Retrieve and respond using LlamaIndex chat engine
     chat_engine = CondenseQuestionChatEngine.from_defaults(
         query_engine=st.session_state.query_engine,
         llm=llm,
         chat_mode="condense_question",
         verbose=False,
     )
-
     response = chat_engine.chat(query)
     answer = str(response)
 
-    # Save conversation to DB and session state
     st.session_state.chat_history.append(HumanMessage(content=query))
     st.session_state.chat_history.append(AIMessage(content=answer))
     save_message(st.session_state.user_email, "user", query)
     save_message(st.session_state.user_email, "assistant", answer)
 
-    # Display assistant response
     with st.chat_message("assistant", avatar="🚗"):
         st.markdown(answer)
 
-    # Convert answer to speech via OpenAI TTS and play it back
-    speak_with_openai_tts(answer, api_key=openai_key)
-            
-# ---------- Chat Input ----------
+    speak_with_openai_tts(answer)
+
+# ---------- Quick Questions ----------
 if not query:
-    query = st.chat_input("Ask your question about the insurance policy documents:")
     with st.container():
         st.markdown("**Quick Questions:**")
         cols = st.columns(3)
@@ -268,8 +231,6 @@ if not query:
             query = "What are the exclusions in this policy?"
         if cols[2].button("❓ How do I make a claim?"):
             query = "How do I make a claim under this policy?"
-
-
 
 # ---------- Display Chat History ----------
 for msg in st.session_state.chat_history:
