@@ -184,17 +184,20 @@ if st.session_state.user_registered and not st.session_state.greeted:
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Audio Input via Microphone ----------
-st.markdown("**🎙️ Speak your question**")
-audio_bytes = st.audio(label="Record and speak your question", format="audio/wav")
+# ---------- Voice Mode ----------
+st.markdown("**🎙️ Voice Mode**")
+record_btn = st.button("🎤 Voice Mode")
 query = None
-if audio_bytes:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-        tmpfile.write(audio_bytes.read())
-        audio_path = tmpfile.name
-    query = transcribe_with_deepgram(audio_path)
-    os.remove(audio_path)
-    st.markdown(f"**You said:** {query}")
+
+if record_btn:
+    audio_bytes = st.audio(label="Recording...", format="audio/wav")
+    if audio_bytes:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
+            tmpfile.write(audio_bytes.read())
+            audio_path = tmpfile.name
+        query = transcribe_with_deepgram(audio_path)
+        os.remove(audio_path)
+        st.markdown(f"**You said:** {query}")
 
 # ---------- Quick Questions ----------
 if not query:
