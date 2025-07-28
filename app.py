@@ -13,6 +13,8 @@ from llama_index.llms.openai import OpenAI
 import requests
 import tempfile
 import base64
+from streamlit_mic_recorder import mic_recorder
+import openai
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
@@ -122,14 +124,36 @@ def load_history(email: str):
             history.append(AIMessage(content=msg))
     return history
 
-def transcribe_with_deepgram(audio_file_path):
-    with open(audio_file_path, "rb") as f:
+def transcribe_with_deepgram(audio_path):
+    with open(audio_path, "rb") as f:
         response = requests.post(
             "https://api.deepgram.com/v1/listen",
             headers={"Authorization": f"Token {deepgram_key}"},
             files={"audio": f},
         )
         return response.json().get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
+
+def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
+    openai.api_key = openai_key
+    speech_response = openai.audio.speech.create(
+        model=model,
+        voice=voice,
+        input=text
+    )
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
+        tmpfile.write(speech_response.read())
+        audio_path = tmpfile.name
+
+    with open(audio_path, "rb") as f:
+        audio_bytes = f.read()
+    b64 = base64.b64encode(audio_bytes).decode()
+    audio_html = f"""
+    <audio autoplay controls>
+    <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+    </audio>
+    """
+    st.markdown(audio_html, unsafe_allow_html=True)
+    os.remove(audio_path)
 
 # ---------- Session State ----------
 if "index" not in st.session_state:
@@ -184,16 +208,14 @@ if st.session_state.user_registered and not st.session_state.greeted:
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Voice Mode ----------
-st.markdown("**🎙️ Voice Mode**")
-record_btn = st.button("🎤 Voice Mode")
+# ---------- Voice Mode (Live Recording) ----------
 query = None
-
-if record_btn:
-    audio_bytes = st.audio(label="Recording...", format="audio/wav")
-    if audio_bytes:
+voice_mode = st.toggle("🎙️ Voice Mode")
+if voice_mode:
+    audio = mic_recorder(key="mic")
+    if audio is not None:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-            tmpfile.write(audio_bytes.read())
+            tmpfile.write(audio)
             audio_path = tmpfile.name
         query = transcribe_with_deepgram(audio_path)
         os.remove(audio_path)
@@ -238,6 +260,8 @@ if query:
 
     save_message(st.session_state.user_email, "user", query)
     save_message(st.session_state.user_email, "assistant", answer)
+
+    speak_with_openai_tts(answer)
 
 # ---------- Display Chat History ----------
 for msg in st.session_state.chat_history:
