@@ -10,10 +10,6 @@ from llama_index.llms.openai import OpenAI
 from langchain.schema import HumanMessage, AIMessage
 from langdetect import detect
 from datetime import datetime
-import requests
-import tempfile
-import base64
-from streamlit_mic_recorder import mic_recorder
 
 # ---------- Config ----------
 DOCS_DIR = "./docs"
@@ -21,11 +17,47 @@ SUPPORTED_EXTS: Tuple[str, ...] = (".txt", ".md", ".pdf")
 DB_PATH = "users.db"
 
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
-st.markdown("""<style>
-    /* Your CSS here */
-</style>""", unsafe_allow_html=True)
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Rubik&display=swap');
 
-st.markdown("""# 🚗 CarInsure Bot  
+    html, body, [class*="css"] {
+        font-family: 'Rubik', sans-serif;
+        color: #3399FF;
+    }
+
+    .block-container {
+        max-width: 900px;
+        margin: auto;
+        padding-top: 2rem;
+    }
+
+    .stChatInputContainer textarea {
+        max-width: 600px !important;
+        margin: auto;
+        display: block;
+    }
+
+    .stButton>button {
+        background-color: #e6f2ff !important;
+        color: #004080 !important;
+        border-radius: 8px;
+    }
+
+    .stChatMessage, .stMarkdown {
+        color: #3399FF !important;
+    }
+
+    .stChatMessageContent {
+        font-family: 'Rubik', sans-serif;
+        max-width: 800px;
+        margin: auto;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+# 🚗 CarInsure Bot  
 Ask about the policy coverage, exclusions, or any clause in the documents.
 """)
 
@@ -34,8 +66,24 @@ openai_key = st.secrets["openai_api_key"]
 # ---------- SQLite Setup ----------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("""CREATE TABLE IF NOT EXISTS users (...)""")
-    conn.execute("""CREATE TABLE IF NOT EXISTS conversations (...)""")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            car TEXT NOT NULL,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_email TEXT NOT NULL,
+            role TEXT CHECK(role IN ('user', 'assistant')) NOT NULL,
+            message TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -123,41 +171,20 @@ if st.session_state.user_registered and not st.session_state.greeted:
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Voice Mode Toggle ----------
-voice_mode = st.toggle("🎤 Voice Mode")
+# ---------- Quick Questions ----------
+query = st.chat_input("Ask your question about the insurance policy documents:")
 
-# ---------- Handle Voice Input ----------
-query = None
-if voice_mode:
-    audio_data = mic_recorder(key="mic")
-    if audio_data is not None:
-        if isinstance(audio_data, dict) and "bytes" in audio_data:
-            audio_bytes = audio_data["bytes"]
-        elif isinstance(audio_data, bytes):
-            audio_bytes = audio_data
-        else:
-            st.error("Unsupported audio format received.")
-            st.stop()
+with st.container():
+    st.markdown("**Quick Questions:**")
+    cols = st.columns(3)
+    if cols[0].button("📄 What does this policy cover?"):
+        query = "What does this policy cover?"
+    if cols[1].button("⚠️ What are the exclusions?"):
+        query = "What are the exclusions in this policy?"
+    if cols[2].button("❓ How do I make a claim?"):
+        query = "How do I make a claim under this policy?"
 
-        # Save audio data to a temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-            tmpfile.write(audio_bytes)
-            audio_path = tmpfile.name
-
-        # Transcribe using Deepgram
-        query = transcribe_with_deepgram(audio_path)
-        os.remove(audio_path)
-
-        if query:
-            st.markdown(f"**You said:** {query}")
-        else:
-            st.warning("Transcription failed or returned empty result.")
-
-# ---------- Text Input Fallback ----------
-if not query:
-    query = st.chat_input("Ask your question about the insurance policy documents:")
-
-# ---------- Query Processing ----------
+# ---------- Chat Logic ----------
 if query:
     try:
         if detect(query) != "en":
