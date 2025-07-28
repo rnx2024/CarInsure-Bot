@@ -214,9 +214,19 @@ voice_mode = st.toggle("🎤 Voice Mode")
 if voice_mode:
     audio = mic_recorder(key="mic")
     if audio is not None:
+        # Ensure byte format before writing to file
+        if isinstance(audio, dict) and "bytes" in audio:
+            audio_bytes = audio["bytes"]
+        elif isinstance(audio, bytes):
+            audio_bytes = audio
+        else:
+            st.error("Unsupported audio format.")
+            st.stop()
+
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-            tmpfile.write(audio)
+            tmpfile.write(audio_bytes)
             audio_path = tmpfile.name
+
         query = transcribe_with_deepgram(audio_path)
         os.remove(audio_path)
         st.markdown(f"**You said:** {query}")
