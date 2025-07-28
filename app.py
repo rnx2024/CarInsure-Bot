@@ -113,6 +113,30 @@ def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     """, unsafe_allow_html=True)
     os.remove(audio_path)
 
+# Add this function near the top of your script
+
+def transcribe_with_deepgram(audio_path):
+    """
+    Sends a recorded audio file to Deepgram and returns the transcribed text.
+    """
+    import requests
+    deepgram_key = st.secrets["deepgram_api_key"]  # make sure it's in your .streamlit/secrets.toml
+
+    with open(audio_path, "rb") as f:
+        response = requests.post(
+            "https://api.deepgram.com/v1/listen",
+            headers={"Authorization": f"Token {deepgram_key}"},
+            files={"audio": f},
+        )
+        data = response.json()
+
+    try:
+        return data["results"]["channels"][0]["alternatives"][0]["transcript"]
+    except Exception as e:
+        st.error("Deepgram transcription failed.")
+        return ""
+
+
 # ---------- Session State ----------
 for k in ["index", "chat_history", "user_registered", "greeted"]:
     if k not in st.session_state:
@@ -161,18 +185,34 @@ if st.session_state.user_registered and not st.session_state.greeted:
 
 # ---------- Voice Mode ----------
 query = None
-if st.toggle("🎤 Voice Mode"):
+voice_mode = st.toggle("🎤 Voice Mode")
+if voice_mode:
     audio_data = mic_recorder(key="mic")
-    if audio_data:
-        audio_bytes = audio_data["bytes"] if isinstance(audio_data, dict) and "bytes" in audio_data else audio_data
-        if isinstance(audio_bytes, bytes):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-                tmpfile.write(audio_bytes)
-                audio_path = tmpfile.name
-            query = transcribe_with_deepgram(audio_path)
-            os.remove(audio_path)
-            st.markdown(f"**You said:** {query}")
+    if audio_data is not None:
+        # Extract bytes from dict if necessary
+        if isinstance(audio_data, dict) and "bytes" in audio_data:
+            audio_bytes = audio_data["bytes"]
+        elif isinstance(audio_data, bytes):
+            audio_bytes = audio_data
+        else:
+            st.error("Unsupported audio format received.")
+            st.stop()
 
+        # Write to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
+            tmpfile.write(audio_bytes)
+            audio_path = tmpfile.name
+
+        # Transcribe using Deepgram
+        query = transcribe_with_deepgram(audio_path)
+        os.remove(audio_path)
+
+        if query:
+            st.markdown(f"**You said:** {query}")
+        else:
+            st.warning("Transcription failed or returned empty result.")
+
+            
 # ---------- Chat Input ----------
 if not query:
     query = st.chat_input("Ask your question about the insurance policy documents:")
