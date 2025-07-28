@@ -7,7 +7,6 @@ from langdetect import detect
 from langchain.schema import HumanMessage, AIMessage
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.chat_engine import CondenseQuestionChatEngine
-from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI
 import requests
@@ -24,40 +23,15 @@ DB_PATH = "users.db"
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗")
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Rubik&display=swap');
-
     html, body, [class*="css"] {
         font-family: 'Rubik', sans-serif;
         color: #3399FF;
     }
-
-    .block-container {
-        max-width: 900px;
-        margin: auto;
-        padding-top: 2rem;
-    }
-
-    .stChatInputContainer textarea {
-        max-width: 600px !important;
-        margin: auto;
-        display: block;
-    }
-
-    .stButton>button {
-        background-color: #e6f2ff !important;
-        color: #004080 !important;
-        border-radius: 8px;
-    }
-
-    .stChatMessage, .stMarkdown {
-        color: #3399FF !important;
-    }
-
-    .stChatMessageContent {
-        font-family: 'Rubik', sans-serif;
-        max-width: 800px;
-        margin: auto;
-    }
+    .block-container { max-width: 900px; margin: auto; padding-top: 2rem; }
+    .stChatInputContainer textarea { max-width: 600px !important; margin: auto; display: block; }
+    .stButton>button { background-color: #e6f2ff !important; color: #004080 !important; border-radius: 8px; }
+    .stChatMessage, .stMarkdown { color: #3399FF !important; }
+    .stChatMessageContent { font-family: 'Rubik', sans-serif; max-width: 800px; margin: auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -99,11 +73,7 @@ init_db()
 def list_local_files(folder: str, exts: Tuple[str, ...]) -> List[str]:
     if not os.path.isdir(folder):
         return []
-    return sorted(
-        os.path.join(folder, f)
-        for f in os.listdir(folder)
-        if f.lower().endswith(exts)
-    )
+    return sorted(os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts))
 
 def save_message(email: str, role: str, message: str):
     conn = sqlite3.connect(DB_PATH)
@@ -116,13 +86,7 @@ def load_history(email: str):
     cursor = conn.execute("SELECT role, message FROM conversations WHERE user_email = ? ORDER BY timestamp ASC", (email,))
     rows = cursor.fetchall()
     conn.close()
-    history = []
-    for role, msg in rows:
-        if role == "user":
-            history.append(HumanMessage(content=msg))
-        else:
-            history.append(AIMessage(content=msg))
-    return history
+    return [HumanMessage(content=msg) if role == "user" else AIMessage(content=msg) for role, msg in rows]
 
 def transcribe_with_deepgram(audio_path):
     with open(audio_path, "rb") as f:
@@ -135,35 +99,24 @@ def transcribe_with_deepgram(audio_path):
 
 def speak_with_openai_tts(text: str, voice="nova", model="tts-1"):
     openai.api_key = openai_key
-    speech_response = openai.audio.speech.create(
-        model=model,
-        voice=voice,
-        input=text
-    )
+    speech_response = openai.audio.speech.create(model=model, voice=voice, input=text)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmpfile:
         tmpfile.write(speech_response.read())
         audio_path = tmpfile.name
-
     with open(audio_path, "rb") as f:
         audio_bytes = f.read()
     b64 = base64.b64encode(audio_bytes).decode()
-    audio_html = f"""
+    st.markdown(f"""
     <audio autoplay controls>
     <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
     </audio>
-    """
-    st.markdown(audio_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
     os.remove(audio_path)
 
 # ---------- Session State ----------
-if "index" not in st.session_state:
-    st.session_state.index = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-if "user_registered" not in st.session_state:
-    st.session_state.user_registered = False
-if "greeted" not in st.session_state:
-    st.session_state.greeted = False
+for k in ["index", "chat_history", "user_registered", "greeted"]:
+    if k not in st.session_state:
+        st.session_state[k] = [] if "history" in k else False
 
 # ---------- User Info Collection ----------
 if not st.session_state.user_registered:
@@ -172,7 +125,6 @@ if not st.session_state.user_registered:
         email = st.text_input("Your Email")
         car = st.text_input("Type of Car")
         submitted = st.form_submit_button("Start Chat")
-
     if submitted and name and email and car:
         conn = sqlite3.connect(DB_PATH)
         conn.execute("INSERT INTO users (name, email, car) VALUES (?, ?, ?)", (name, email, car))
@@ -198,9 +150,8 @@ with st.spinner("📚 Indexing documents..."):
     embed_model = OpenAIEmbedding(api_key=openai_key)
     llm = OpenAI(model="gpt-4o", api_key=openai_key)
     index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
-    query_engine = index.as_query_engine(llm=llm)
     st.session_state.index = index
-    st.session_state.query_engine = query_engine
+    st.session_state.query_engine = index.as_query_engine(llm=llm)
 
 # ---------- Greet User ----------
 if st.session_state.user_registered and not st.session_state.greeted:
@@ -208,33 +159,23 @@ if st.session_state.user_registered and not st.session_state.greeted:
         st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
     st.session_state.greeted = True
 
-# ---------- Voice Mode (Live Recording) ----------
+# ---------- Voice Mode ----------
 query = None
-voice_mode = st.toggle("🎤 Voice Mode")
-if voice_mode:
-    audio = mic_recorder(key="mic")
-    if audio is not None:
-        # Ensure byte format before writing to file
-        if isinstance(audio, dict) and "bytes" in audio:
-            audio_bytes = audio["bytes"]
-        elif isinstance(audio, bytes):
-            audio_bytes = audio
-        else:
-            st.error("Unsupported audio format.")
-            st.stop()
+if st.toggle("🎤 Voice Mode"):
+    audio_data = mic_recorder(key="mic")
+    if audio_data:
+        audio_bytes = audio_data["bytes"] if isinstance(audio_data, dict) and "bytes" in audio_data else audio_data
+        if isinstance(audio_bytes, bytes):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
+                tmpfile.write(audio_bytes)
+                audio_path = tmpfile.name
+            query = transcribe_with_deepgram(audio_path)
+            os.remove(audio_path)
+            st.markdown(f"**You said:** {query}")
 
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
-            tmpfile.write(audio_bytes)
-            audio_path = tmpfile.name
-
-        query = transcribe_with_deepgram(audio_path)
-        os.remove(audio_path)
-        st.markdown(f"**You said:** {query}")
-
-# ---------- Quick Questions ----------
+# ---------- Chat Input ----------
 if not query:
     query = st.chat_input("Ask your question about the insurance policy documents:")
-
     with st.container():
         st.markdown("**Quick Questions:**")
         cols = st.columns(3)
