@@ -205,14 +205,8 @@ if not ss.user_registered:
     else:
         st.stop()
 
-# =========================
-# Navigation (fixed)
-# =========================
-
-# 1) Define pages as callables
 def page_chat():
-    # -- your Chat page code --
-    # Greeting
+    # Greeting only once
     if ss.user_registered and not ss.greeted:
         with st.chat_message("assistant", avatar="🚗"):
             st.markdown(f"Hi {ss.user_name}, nice to meet you! How can I help you today?")
@@ -224,10 +218,13 @@ def page_chat():
     render_quick_actions()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # History + input
+    # Show existing chat
     if ss.chat_history:
         render_history_list(ss.chat_history)
+
+    # Chat input
     handle_chat_input()
+
 
 def page_history():
     st.markdown("##### Conversation History")
@@ -235,6 +232,7 @@ def page_history():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     render_history_list(ss.chat_history)
     st.markdown('</div>', unsafe_allow_html=True)
+
 
 def page_settings():
     st.markdown("##### Profile & Session")
@@ -246,9 +244,12 @@ def page_settings():
     if st.button("Log out & reset session", type="primary"):
         logout_reset()
     st.markdown('</div>', unsafe_allow_html=True)
-
-# 2) Use st.navigation correctly (Streamlit 1.46+)
+  
+# =========================
+# Navigation (Streamlit 1.46+) with fallback
+# =========================
 if hasattr(st, "navigation"):
+    # Use Page objects (functions, not strings)
     pages = {
         "Assistant": [
             st.Page(page_chat, title="Chat", icon=":speech_balloon:"),
@@ -258,12 +259,15 @@ if hasattr(st, "navigation"):
             st.Page(page_settings, title="Settings", icon=":gear:"),
         ],
     }
-    pg = st.navigation(pages, position="top")
-    pg.run()
+    nav = st.navigation(pages, position="top")  # position="top" needs 1.46+
+    nav.run()
 else:
-    # 3) Fallback for older versions
+    # Older Streamlit: fall back to tabs
     tab_chat, tab_hist, tab_set = st.tabs(["Chat", "History", "Settings"])
-    with tab_chat: page_chat()
-    with tab_hist: page_history()
-    with tab_set: page_settings()
+    with tab_chat:
+        page_chat()
+    with tab_hist:
+        page_history()
+    with tab_set:
+        page_settings()
 
