@@ -241,7 +241,7 @@ if not ss.user_registered:
                     # If backend returns 404 for unknown email, prompt to register
                     code = getattr(http_err.response, "status_code", None)
                     if code == 404:
-                        st.error("Email not found. Please register under the 'I’m new' tab.")
+                        st.error("Email not found. Please register.")
                         st.stop()
                     else:
                         st.error(f"Login failed: {http_err.response.text}")
