@@ -1,220 +1,179 @@
 import os
-import sqlite3
-from typing import List, Tuple
+import requests
 import streamlit as st
-from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
-from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.chat_engine import CondenseQuestionChatEngine
-from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.llms.openai import OpenAI
-from langchain.schema import HumanMessage, AIMessage
-from langdetect import detect
-from datetime import datetime
 
-# ---------- Config ----------
-DOCS_DIR = "./docs"
-SUPPORTED_EXTS: Tuple[str, ...] = (".txt", ".md", ".pdf")
-DB_PATH = "users.db"
+# ----------------- Config -----------------
+API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
 
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
+
+# ----------------- Custom Styling -----------------
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Rubik&display=swap');
-
+    @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&display=swap');
     html, body, [class*="css"] {
         font-family: 'Rubik', sans-serif;
-        color: #3399FF;
+        background-color: #f9fbfd;
+        color: #333;
     }
-
     .block-container {
-        max-width: 900px;
+        max-width: 850px;
         margin: auto;
-        padding-top: 2rem;
+        padding-top: 1rem;
     }
-
-    .stChatInputContainer textarea {
-        max-width: 600px !important;
-        margin: auto;
-        display: block;
+    .title {
+        font-size: 1.8rem;
+        font-weight: 500;
+        text-align: center;
+        color: #004080;
+        margin-bottom: 1rem;
     }
-
     .stButton>button {
         background-color: #e6f2ff !important;
         color: #004080 !important;
         border-radius: 8px;
+        padding: 0.4rem 0.8rem;
+        font-weight: 500;
     }
-
-    .stChatMessage, .stMarkdown {
-        color: #3399FF !important;
+    .quick-btn button {
+        width: 100%;
+        background-color: #f1f6ff !important;
+        color: #004080 !important;
+        font-size: 0.9rem;
+        border-radius: 6px;
+        padding: 0.4rem;
     }
-
     .stChatMessageContent {
         font-family: 'Rubik', sans-serif;
-        max-width: 800px;
-        margin: auto;
+        font-size: 0.95rem;
+    }
+    .stTextInput>div>div>input {
+        border-radius: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-# 🚗 CarInsure Bot  
-Ask about the policy coverage, exclusions, or any clause in the documents.
-""")
+st.markdown("<div class='title'>🚗 CarInsure Bot</div>", unsafe_allow_html=True)
 
-openai_key = st.secrets["openai_api_key"]
-
-# ---------- SQLite Setup ----------
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            car TEXT NOT NULL,
-            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS conversations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_email TEXT NOT NULL,
-            role TEXT CHECK(role IN ('user', 'assistant')) NOT NULL,
-            message TEXT NOT NULL,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# ---------- Helpers ----------
-def list_local_files(folder: str, exts: Tuple[str, ...]) -> List[str]:
-    if not os.path.isdir(folder):
-        return []
-    return sorted(
-        os.path.join(folder, f)
-        for f in os.listdir(folder)
-        if f.lower().endswith(exts)
-    )
-
-def save_message(email: str, role: str, message: str):
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("INSERT INTO conversations (user_email, role, message) VALUES (?, ?, ?)", (email, role, message))
-    conn.commit()
-    conn.close()
-
-def load_history(email: str):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.execute("SELECT role, message FROM conversations WHERE user_email = ? ORDER BY timestamp ASC", (email,))
-    rows = cursor.fetchall()
-    conn.close()
-    history = []
-    for role, msg in rows:
-        if role == "user":
-            history.append(HumanMessage(content=msg))
-        else:
-            history.append(AIMessage(content=msg))
-    return history
-
-# ---------- Session State ----------
-if "index" not in st.session_state:
-    st.session_state.index = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# ----------------- Session State -----------------
 if "user_registered" not in st.session_state:
     st.session_state.user_registered = False
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
+if "car" not in st.session_state:
+    st.session_state.car = ""
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 if "greeted" not in st.session_state:
     st.session_state.greeted = False
 
-# ---------- User Info Collection ----------
+# ----------------- API Helpers -----------------
+def api_register(name: str, email: str, car: str):
+    payload = {"name": name, "email": email, "car": car}
+    r = requests.post(f"{API_BASE}/register", json=payload, timeout=60)
+    r.raise_for_status()
+    return r.json() if r.content else {}
+
+def api_history(email: str):
+    r = requests.get(f"{API_BASE}/history/{email}", timeout=60)
+    r.raise_for_status()
+    return r.json() if r.content else {}
+
+def api_ask(email: str, message: str):
+    payload = {"email": email, "message": message}
+    r = requests.post(f"{API_BASE}/ask", json=payload, timeout=120)
+    r.raise_for_status()
+    return r.json() if r.content else {}
+
+# ----------------- Registration -----------------
 if not st.session_state.user_registered:
-    with st.form("user_form"):
-        name = st.text_input("Your Name")
-        email = st.text_input("Your Email")
-        car = st.text_input("Type of Car")
+    with st.form("user_form", clear_on_submit=False):
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col1:
+            name = st.text_input("Name", placeholder="John Doe")
+        with col2:
+            email = st.text_input("Email", placeholder="you@email.com")
+        with col3:
+            car = st.text_input("Car", placeholder="Toyota Corolla")
         submitted = st.form_submit_button("Start Chat")
 
-    if submitted and name and email and car:
-        conn = sqlite3.connect(DB_PATH)
-        conn.execute("INSERT INTO users (name, email, car) VALUES (?, ?, ?)", (name, email, car))
-        conn.commit()
-        conn.close()
+    if submitted:
+        if not name or not email or not car:
+            st.warning("Please complete all fields.")
+            st.stop()
+        try:
+            api_register(name, email, car)
+        except requests.HTTPError as http_err:
+            st.error(f"Registration failed: {http_err.response.text}")
+            st.stop()
+        except Exception as e:
+            st.error(f"Registration failed: {e}")
+            st.stop()
+
         st.session_state.user_registered = True
         st.session_state.user_name = name
         st.session_state.user_email = email
-        st.session_state.chat_history = load_history(email)
+        st.session_state.car = car
+
+        try:
+            data = api_history(email)
+            st.session_state.chat_history = data.get("history", []) if isinstance(data, dict) else []
+        except Exception as e:
+            st.warning(f"Could not load history: {e}")
+
         st.rerun()
     else:
         st.stop()
 
-# ---------- Load Documents and Create Index ----------
-files = list_local_files(DOCS_DIR, SUPPORTED_EXTS)
-if not files:
-    st.error(f"No documents found in '{DOCS_DIR}'.")
-    st.stop()
-
-with st.spinner("📚 Indexing documents..."):
-    reader = SimpleDirectoryReader(DOCS_DIR)
-    documents = reader.load_data()
-    embed_model = OpenAIEmbedding(api_key=openai_key)
-    llm = OpenAI(model="gpt-4o", api_key=openai_key)
-    index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
-    query_engine = index.as_query_engine(llm=llm)
-    st.session_state.index = index
-    st.session_state.query_engine = query_engine
-
-# ---------- Greet User ----------
+# ----------------- Greeting -----------------
 if st.session_state.user_registered and not st.session_state.greeted:
     with st.chat_message("assistant", avatar="🚗"):
-        st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! What can I do for you today?")
+        st.markdown(f"Hi {st.session_state.user_name}, nice to meet you! How can I help you today?")
     st.session_state.greeted = True
 
-# ---------- Quick Questions ----------
-query = st.chat_input("Ask your question about the insurance policy documents:")
+# ----------------- Quick Questions -----------------
+cols = st.columns(3)
+quick = None
+if cols[0].button("📄 Coverage?", key="cover", help="What does this policy cover?", use_container_width=True):
+    quick = "What does this policy cover?"
+if cols[1].button("⚠️ Exclusions?", key="exclude", help="What are the exclusions?", use_container_width=True):
+    quick = "What are the exclusions in this policy?"
+if cols[2].button("❓ Claim Process?", key="claim", help="How to make a claim?", use_container_width=True):
+    quick = "How do I make a claim under this policy?"
 
-with st.container():
-    st.markdown("**Quick Questions:**")
-    cols = st.columns(3)
-    if cols[0].button("📄 What does this policy cover?"):
-        query = "What does this policy cover?"
-    if cols[1].button("⚠️ What are the exclusions?"):
-        query = "What are the exclusions in this policy?"
-    if cols[2].button("❓ How do I make a claim?"):
-        query = "How do I make a claim under this policy?"
+# ----------------- Chat Input -----------------
+query = st.chat_input("Type your question...")
+if quick and not query:
+    query = quick
 
-# ---------- Chat Logic ----------
+# ----------------- Chat Logic -----------------
 if query:
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(query)
+    st.session_state.chat_history.append({"role": "user", "message": query})
+
+    answer = ""
     try:
-        if detect(query) != "en":
-            st.warning("I can only respond in English.")
-            st.stop()
-    except Exception:
-        st.warning("Please repeat your question.")
-        st.stop()
+        resp = api_ask(st.session_state.user_email, query)
+        answer = (resp.get("answer") or "").strip()
+    except requests.HTTPError as http_err:
+        answer = f"Server error: {http_err.response.text}"
+    except Exception as e:
+        answer = f"Error contacting server: {e}"
 
-    chat_engine = CondenseQuestionChatEngine.from_defaults(
-        query_engine=st.session_state.query_engine,
-        llm=llm,
-        chat_mode="condense_question",
-        verbose=False,
-    )
+    with st.chat_message("assistant", avatar="🚗"):
+        st.markdown(answer if answer else "_No answer returned_")
+    st.session_state.chat_history.append({"role": "assistant", "message": answer})
 
-    response = chat_engine.chat(query)
-    answer = str(response)
-
-    st.session_state.chat_history.append(HumanMessage(content=query))
-    st.session_state.chat_history.append(AIMessage(content=answer))
-
-    save_message(st.session_state.user_email, "user", query)
-    save_message(st.session_state.user_email, "assistant", answer)
-
-# ---------- Display Chat History ----------
+# ----------------- History -----------------
 for msg in st.session_state.chat_history:
-    if isinstance(msg, HumanMessage):
+    role = msg.get("role", "assistant")
+    text = msg.get("message", "")
+    if role == "user":
         with st.chat_message("user", avatar="👤"):
-            st.markdown(msg.content)
-    elif isinstance(msg, AIMessage):
+            st.markdown(text)
+    else:
         with st.chat_message("assistant", avatar="🚗"):
-            st.markdown(msg.content)
+            st.markdown(text)
