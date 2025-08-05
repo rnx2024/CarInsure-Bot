@@ -236,11 +236,10 @@ if not ss.user_registered:
                     ss.user_email = email
                     ss.user_last_email = email
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                    # We may not have name/car from history; keep them if already in session
                     ss.user_registered = True
                     st.rerun()
-                except requests.HTTPError as http_err:
-                    # If backend returns 404/NotFound for unknown email, fall through to full registration
+                except requests.HTTPError:
+                    # Unknown email -> fall through to full registration
                     pass
                 except Exception as e:
                     st.warning(f"Could not verify email: {e}")
@@ -280,12 +279,16 @@ if not ss.user_registered:
                             st.warning(f"Could not load history: {e}")
                         st.rerun()
 
+        # close inner .card
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # Close wrappers and return (avoid st.stop before closing wrappers)
+    # close outer wrappers and stop after drawing login/registration card
     st.markdown('</div></div>', unsafe_allow_html=True)
-    return  # end early after drawing login/registration card
+    st.stop()
 
+# (Registered path continues below...)
+
+      
 # =========================
 # Main Single-Page UI (inside same centered card)
 # =========================
