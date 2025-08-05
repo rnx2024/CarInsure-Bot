@@ -314,9 +314,6 @@ def page_settings():
         logout_reset()
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Wrapper
-st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
-render_header()
 
 # Navigation (Streamlit 1.46+) with fallback
 if hasattr(st, "navigation"):
