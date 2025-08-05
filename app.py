@@ -11,43 +11,89 @@ API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/
 READ_TIMEOUT = 120
 CONNECT_TIMEOUT = 60
 
+# Theme (choose: "lightblue" or "beige")
+THEME_BG = "lightblue"
+
 # =========================
 # Global Styles
 # =========================
-st.markdown("""
+st.markdown(f"""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap');
 
-  html, body, [class*="css"] {
+  :root {{
+    --bg-lightblue: #eaf4ff;   /* light blue */
+    --bg-beige:     #f7f1e3;   /* beige */
+    --card-bg: #ffffff;
+    --text: #1f2937;
+    --border: #e5e7eb;
+  }}
+
+  html, body, [class*="css"] {{
       font-family: 'Rubik', sans-serif;
-      background-color: #f6f9fc;
-      color: #1f2937;
-  }
-  .main .block-container { max-width: 900px; padding-top: 1.2rem; }
+      background-color: {{'var(--bg-lightblue)' if THEME_BG == 'lightblue' else 'var(--bg-beige)'}};
+      color: var(--text);
+  }}
 
-  .app-header { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px 0; }
-  .app-header h2 { margin: 0; padding: 0; font-weight: 600; }
+  .main .block-container {{
+      max-width: 1200px;
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.5rem !important;
+  }}
 
-  .card {
+  /* Full-page centering shell */
+  .app-shell {{
+      min-height: calc(100vh - 1.5rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+  }}
+
+  /* Compact, square-ish card */
+  .app-card {{
+      width: 800px;
+      max-width: 92vw;
+      min-height: 70vh;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.08);
+      padding: 16px 18px;
+  }}
+
+  .app-header {{ display: flex; align-items: center; gap: 10px; margin: 2px 0 10px 0; }}
+  .app-header h2 {{ margin: 0; padding: 0; font-weight: 600; }}
+
+  .card {{
       background: #ffffff;
-      border: 1px solid #e5e7eb;
+      border: 1px solid var(--border);
       border-radius: 12px;
       padding: 18px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-  }
+  }}
 
-  .stButton>button {
+  .stButton>button {{
       background-color: #e6f2ff !important;
       color: #004080 !important;
       border-radius: 8px;
       padding: 0.45rem 0.9rem;
       font-weight: 500;
       border: 1px solid #cfe3ff;
-  }
-  .stButton>button:hover { filter: brightness(0.98); }
+  }}
+  .stButton>button:hover {{ filter: brightness(0.98); }}
 
-  .stChatMessageContent { font-size: 0.98rem; }
-  .stTextInput>div>div>input, .stTextArea textarea { border-radius: 8px; }
+  .stChatMessageContent {{ font-size: 0.98rem; }}
+  .stTextInput>div>div>input, .stTextArea textarea {{ border-radius: 8px; }}
+
+  /* Scrollable chat area to keep the card compact */
+  .chat-scroll {{
+      max-height: 55vh;
+      overflow-y: auto;
+      padding-right: 4px;
+  }}
+
+  /* Tighter divider spacing */
+  hr {{ margin: 8px 0 !important; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -73,10 +119,11 @@ def render_header():
             <span style="font-size: 24px;">🚗</span>
             <h2>Insurance Assistant</h2>
         </div>
+        <hr/>
         """,
         unsafe_allow_html=True
     )
-    st.divider()
+    # st.divider()  # kept visually minimal via <hr/>
 
 def is_valid_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
@@ -158,6 +205,7 @@ def logout_reset():
 # =========================
 # Registration Gate
 # =========================
+st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
 render_header()
 
 if not ss.user_registered:
@@ -218,13 +266,14 @@ def page_chat():
     render_quick_actions()
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Show existing chat
+    # Show existing chat (scrollable inside the card)
+    st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
     if ss.chat_history:
         render_history_list(ss.chat_history)
+    st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat input
     handle_chat_input()
-
 
 def page_history():
     st.markdown("##### Conversation History")
@@ -232,7 +281,6 @@ def page_history():
     st.markdown('<div class="card">', unsafe_allow_html=True)
     render_history_list(ss.chat_history)
     st.markdown('</div>', unsafe_allow_html=True)
-
 
 def page_settings():
     st.markdown("##### Profile & Session")
@@ -244,7 +292,7 @@ def page_settings():
     if st.button("Log out & reset session", type="primary"):
         logout_reset()
     st.markdown('</div>', unsafe_allow_html=True)
-  
+
 # =========================
 # Navigation (Streamlit 1.46+) with fallback
 # =========================
@@ -271,3 +319,5 @@ else:
     with tab_set:
         page_settings()
 
+# Close centered wrappers
+st.markdown('</div></div>', unsafe_allow_html=True)
