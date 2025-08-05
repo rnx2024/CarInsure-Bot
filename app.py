@@ -35,29 +35,30 @@ st.markdown(f"""
       color: var(--text);
   }}
 
-  /* Remove large default padding at top/bottom */
+  /* Remove default top/bottom padding so content sits near the top */
   .main .block-container {{
       max-width: 1200px;
       padding-top: 0rem !important;
       padding-bottom: 0rem !important;
   }}
 
-  /* Position card near top instead of vertical centering */
+  /* Keep only horizontal centering; no vertical centering */
   .app-shell {{
       display: flex;
       justify-content: center;
-      margin-top: 1rem; /* adjust smaller if needed */
+      margin-top: 0.5rem;   /* tweak as you like */
   }}
 
+  /* Let the card size to content (no forced tall empty area) */
   .app-card {{
       width: 800px;
       max-width: 92vw;
-      min-height: 70vh;
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
       box-shadow: 0 18px 50px rgba(0,0,0,0.08);
       padding: 16px 18px;
+      min-height: auto;     /* was 70vh — remove it */
   }}
 
   .app-header {{ display: flex; align-items: center; gap: 10px; margin: 2px 0 10px 0; }}
@@ -93,7 +94,6 @@ st.markdown(f"""
   hr {{ margin: 8px 0 !important; }}
 </style>
 """, unsafe_allow_html=True)
-
 
 # =========================
 # Session State
