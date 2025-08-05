@@ -213,45 +213,62 @@ if not ss.user_registered:
     with center:
         st.markdown('<div class="card" style="padding: 2rem;">', unsafe_allow_html=True)
         st.markdown("#### 🚗 Welcome to CarInsure Bot")
-        st.caption("Enter your details to start chatting with the assistant.")
 
-        with st.form("user_form", clear_on_submit=False):
-            name = st.text_input("Name", placeholder="John Doe")
-            email = st.text_input("Email", placeholder="you@email.com")
-            car = st.text_input("Car", placeholder="Toyota Corolla")
-            submitted = st.form_submit_button("Start Chat", use_container_width=True)
+        # If user_name & car already stored, only ask for email
+        if ss.get("user_name") and ss.get("car"):
+            st.caption("Enter your email to continue your session.")
+            with st.form("email_form", clear_on_submit=False):
+                email = st.text_input("Email", placeholder="you@email.com")
+                submitted = st.form_submit_button("Continue", use_container_width=True)
+            if submitted:
+                if not email or not is_valid_email(email):
+                    st.warning("Please enter a valid email address.")
+                    st.stop()
+                ss.user_email = email
+                try:
+                    data = api_history(email)
+                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                except Exception as e:
+                    st.warning(f"Could not load history: {e}")
+                ss.user_registered = True
+                st.rerun()
+
+        else:
+            st.caption("Enter your details to start chatting with the assistant.")
+            with st.form("user_form", clear_on_submit=False):
+                name = st.text_input("Name", placeholder="John Doe")
+                email = st.text_input("Email", placeholder="you@email.com")
+                car = st.text_input("Car", placeholder="Toyota Corolla")
+                submitted = st.form_submit_button("Start Chat", use_container_width=True)
+            if submitted:
+                if not name or not email or not car:
+                    st.warning("Please complete all fields.")
+                    st.stop()
+                if not is_valid_email(email):
+                    st.warning("Please enter a valid email address.")
+                    st.stop()
+                try:
+                    api_register(name, email, car)
+                except requests.HTTPError as http_err:
+                    st.error(f"Registration failed: {http_err.response.text}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"Registration failed: {e}")
+                    st.stop()
+                # Save details in session for next time
+                ss.user_registered = True
+                ss.user_name = name
+                ss.user_email = email
+                ss.car = car
+                try:
+                    data = api_history(email)
+                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                except Exception as e:
+                    st.warning(f"Could not load history: {e}")
+                st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
-
-    if submitted:
-        if not name or not email or not car:
-            st.warning("Please complete all fields.")
-            st.stop()
-        if not is_valid_email(email):
-            st.warning("Please enter a valid email address.")
-            st.stop()
-        try:
-            api_register(name, email, car)
-        except requests.HTTPError as http_err:
-            st.error(f"Registration failed: {http_err.response.text}")
-            st.stop()
-        except Exception as e:
-            st.error(f"Registration failed: {e}")
-            st.stop()
-
-        ss.user_registered = True
-        ss.user_name = name
-        ss.user_email = email
-        ss.car = car
-
-        try:
-            data = api_history(email)
-            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-        except Exception as e:
-            st.warning(f"Could not load history: {e}")
-
-        st.rerun()
-    else:
-        st.stop()
+    st.stop()
 
 def page_chat():
     # Greeting only once
