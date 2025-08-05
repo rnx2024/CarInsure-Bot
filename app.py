@@ -17,85 +17,66 @@ THEME_BG = "lightblue"
 # =========================
 # Global Styles
 # =========================
-st.markdown(f"""
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap');
-
-  :root {{
-    --bg-lightblue: #eaf4ff;   /* light blue */
-    --bg-beige:     #f7f1e3;   /* beige */
-    --card-bg: #ffffff;
-    --text: #1f2937;
-    --border: #e5e7eb;
-  }}
-
-  html, body, [class*="css"] {{
-      font-family: 'Rubik', sans-serif;
-      background-color: {{'var(--bg-lightblue)' if THEME_BG == 'lightblue' else 'var(--bg-beige)'}};
-      color: var(--text);
-  }}
-
-  .main .block-container {{
-      max-width: 1200px;
-      padding-top: 0.5rem !important;
-      padding-bottom: 0.5rem !important;
-  }}
-
-  /* Full-page centering shell */
-  .app-shell {{
-      min-height: calc(100vh - 1.5rem);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-  }}
-
-  /* Compact, square-ish card */
-  .app-card {{
-      width: 800px;
-      max-width: 92vw;
-      min-height: 70vh;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 18px 50px rgba(0,0,0,0.08);
-      padding: 16px 18px;
-  }}
-
-  .app-header {{ display: flex; align-items: center; gap: 10px; margin: 2px 0 10px 0; }}
-  .app-header h2 {{ margin: 0; padding: 0; font-weight: 600; }}
-
-  .card {{
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-  }}
-
-  .stButton>button {{
-      background-color: #e6f2ff !important;
-      color: #004080 !important;
-      border-radius: 8px;
-      padding: 0.45rem 0.9rem;
-      font-weight: 500;
-      border: 1px solid #cfe3ff;
-  }}
-  .stButton>button:hover {{ filter: brightness(0.98); }}
-
-  .stChatMessageContent {{ font-size: 0.98rem; }}
-  .stTextInput>div>div>input, .stTextArea textarea {{ border-radius: 8px; }}
-
-  /* Scrollable chat area to keep the card compact */
-  .chat-scroll {{
-      max-height: 55vh;
-      overflow-y: auto;
-      padding-right: 4px;
-  }}
-
-  /* Tighter divider spacing */
-  hr {{ margin: 8px 0 !important; }}
-</style>
+st.markdown("""
+    <style>
+    body, .stApp {
+        background: linear-gradient(120deg, #f8fbff, #e4ecf7);
+    }
+    /* Outer centered container */
+    .app-shell {
+        min-height: calc(100vh - 1.5rem);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Squared card with rounded corners and shadow */
+    .app-card {
+        width: 800px;
+        max-width: 92vw;
+        background-color: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+    }
+    /* Header icon + title alignment */
+    .app-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+    .app-header h2 {
+        margin: 0;
+        font-weight: 600;
+    }
+    /* Buttons */
+    .stButton>button {
+        background-color: #1E40AF !important;
+        color: #ffffff !important;
+        padding: 0.6rem 1.2rem;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        border-radius: 8px !important;
+        border: none !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    .stButton>button:hover {
+        background-color: #2563EB !important;
+    }
+    /* Input fields */
+    .stTextInput>div>div>input, .stTextArea textarea {
+        border-radius: 8px;
+        font-size: 16px;
+    }
+    /* Scroll area for chat */
+    .chat-scroll {
+        max-height: 55vh;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+    </style>
 """, unsafe_allow_html=True)
+
 
 # =========================
 # Session State
@@ -212,103 +193,93 @@ def logout_reset():
 # =========================
 # Registration / Login (Email-first with fallback)
 # =========================
-st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
-render_header()
-
 if not ss.user_registered:
-    left, center, right = st.columns([1, 2, 1])
-    with center:
-        st.markdown('<div class="card" style="padding: 2rem;">', unsafe_allow_html=True)
-        st.markdown("#### 🚗 Welcome to CarInsure Bot")
-        st.caption("Enter your email to continue. If you're new, we'll ask for a few more details.")
+    # Open centered rounded card
+    st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
 
-        # Step 1: Email-only attempt
-        with st.form("email_first_form", clear_on_submit=False):
-            email = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
-            email_submit = st.form_submit_button("Continue", use_container_width=True)
+    # Header
+    st.markdown("""
+        <div class="app-header">
+            <span style="font-size: 24px;">🚗</span>
+            <h2>Insurance Assistant</h2>
+        </div>
+    """, unsafe_allow_html=True)
 
-        if email_submit:
-            if not is_valid_email(email):
-                st.warning("Please enter a valid email address.")
-            else:
+    # --- Login / Registration UI (inside the card) ---
+    with st.form("email_first_form", clear_on_submit=False):
+        email = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
+        email_submit = st.form_submit_button("Continue", use_container_width=True)
+    if email_submit and is_valid_email(email):
+        try:
+            data = api_history(email)
+            ss.user_email = email
+            ss.user_last_email = email
+            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+            ss.user_registered = True
+            st.rerun()
+        except requests.HTTPError:
+            pass
+        except Exception as e:
+            st.warning(f"Could not verify email: {e}")
+
+    if not ss.user_registered:
+        st.markdown("---")
+        with st.form("user_form", clear_on_submit=False):
+            name = st.text_input("Name", placeholder="John Doe")
+            new_email = st.text_input("Confirm Email", value=email or "", placeholder="you@email.com")
+            car = st.text_input("Car", placeholder="Toyota Corolla")
+            submitted = st.form_submit_button("Start Chat", use_container_width=True)
+        if submitted and name and car and is_valid_email(new_email):
+            try:
+                api_register(name, new_email, car)
+                ss.user_registered = True
+                ss.user_name = name
+                ss.user_email = new_email
+                ss.user_last_email = new_email
+                ss.car = car
                 try:
-                    data = api_history(email)  # If email exists, this should succeed
-                    ss.user_email = email
-                    ss.user_last_email = email
+                    data = api_history(new_email)
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                    ss.user_registered = True
-                    st.rerun()
-                except requests.HTTPError:
-                    # Unknown email -> fall through to full registration
-                    pass
                 except Exception as e:
-                    st.warning(f"Could not verify email: {e}")
+                    st.warning(f"Could not load history: {e}")
+                st.rerun()
+            except requests.HTTPError as http_err:
+                st.error(f"Registration failed: {http_err.response.text}")
+            except Exception as e:
+                st.error(f"Registration failed: {e}")
 
-        # Step 2: Full registration fallback (only if not registered yet)
-        if not ss.user_registered:
-            st.markdown("---")
-            st.caption("New here? Please register below.")
-            with st.form("user_form", clear_on_submit=False):
-                name = st.text_input("Name", placeholder="John Doe")
-                new_email = st.text_input("Confirm Email", value=email or "", placeholder="you@email.com")
-                car = st.text_input("Car", placeholder="Toyota Corolla")
-                submitted = st.form_submit_button("Start Chat", use_container_width=True)
-
-            if submitted:
-                if not name or not new_email or not car:
-                    st.warning("Please complete all fields.")
-                elif not is_valid_email(new_email):
-                    st.warning("Please enter a valid email address.")
-                else:
-                    try:
-                        api_register(name, new_email, car)
-                    except requests.HTTPError as http_err:
-                        st.error(f"Registration failed: {http_err.response.text}")
-                    except Exception as e:
-                        st.error(f"Registration failed: {e}")
-                    else:
-                        ss.user_registered = True
-                        ss.user_name = name
-                        ss.user_email = new_email
-                        ss.user_last_email = new_email
-                        ss.car = car
-                        try:
-                            data = api_history(new_email)
-                            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                        except Exception as e:
-                            st.warning(f"Could not load history: {e}")
-                        st.rerun()
-
-        # close inner .card
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # close outer wrappers and stop after drawing login/registration card
+    # Close card wrapper and stop rendering this page
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# (Registered path continues below...)
-
-      
+     
 # =========================
 # Main Single-Page UI (inside same centered card)
 # =========================
 # Greeting only once
-if ss.user_registered and not ss.greeted:
-    with st.chat_message("assistant", avatar="🚗"):
-        st.markdown(f"Hi {ss.user_name or ss.user_email}, how can I help you today?")
-    ss.greeted = True
+# Open the centered card
+st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
 
-# Quick actions
-st.markdown('<div class="card">', unsafe_allow_html=True)
-st.markdown("**Quick questions**")
-render_quick_actions()
-st.markdown('</div>', unsafe_allow_html=True)
+# Header
+st.markdown("""
+    <div class="app-header">
+        <span style="font-size: 24px;">🚗</span>
+        <h2>Insurance Assistant</h2>
+    </div>
+""", unsafe_allow_html=True)
 
-# Existing chat (scrollable area)
+# Existing chat (scrollable area inside the card)
 st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
 if ss.chat_history:
     render_history_list(ss.chat_history)
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)  # close chat scroll
+
+# Chat input and other card content here...
+handle_chat_input()
+
+# Close the card
+st.markdown('</div></div>', unsafe_allow_html=True)
+
 
 # Chat input
 handle_chat_input()
