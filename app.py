@@ -4,6 +4,7 @@ import streamlit as st
 
 # ----------------- Config -----------------
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
+
 API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
 
 # ----------------- Custom Styling -----------------
