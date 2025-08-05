@@ -6,26 +6,38 @@ import streamlit as st
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
 API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
 # ----------------- Custom Styling -----------------
+# --- Modern, Sleek, and Centered Styling ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&display=swap');
+
     html, body, [class*="css"] {
         font-family: 'Rubik', sans-serif;
         background-color: #f9fbfd;
         color: #333;
     }
+
+    /* Container with proper top space for icon/title */
     .block-container {
         max-width: 850px;
         margin: auto;
-        padding-top: 1rem;
+        padding-top: 2.5rem; /* enough room for icon/title */
     }
-    .title {
-        font-size: 1.8rem;
+
+    /* Title styling */
+    .custom-title {
+        font-size: 1.9rem;
         font-weight: 500;
         text-align: center;
         color: #004080;
         margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
     }
+
+    /* Buttons */
     .stButton>button {
         background-color: #e6f2ff !important;
         color: #004080 !important;
@@ -33,6 +45,8 @@ st.markdown("""
         padding: 0.4rem 0.8rem;
         font-weight: 500;
     }
+
+    /* Quick question buttons */
     .quick-btn button {
         width: 100%;
         background-color: #f1f6ff !important;
@@ -41,17 +55,20 @@ st.markdown("""
         border-radius: 6px;
         padding: 0.4rem;
     }
+
+    /* Chat content */
     .stChatMessageContent {
         font-family: 'Rubik', sans-serif;
         font-size: 0.95rem;
     }
+
+    /* Input fields */
     .stTextInput>div>div>input {
         border-radius: 6px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("<div class='title'>🚗 CarInsure Bot</div>", unsafe_allow_html=True)
 
 # ----------------- Session State -----------------
 if "user_registered" not in st.session_state:
