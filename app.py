@@ -217,19 +217,21 @@ def logout_reset():
 # =========================
 render_header()
 
-if not ss.user_registered:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("#### Get started")
-    st.caption("Enter your details to start chatting with the assistant.")
-    with st.form("user_form", clear_on_submit=False):
-        c1, c2 = st.columns([1, 1])
-        with c1:
+# ----------------- Registration -----------------
+if not st.session_state.user_registered:
+    # Center the card using empty columns
+    left, center, right = st.columns([1, 2, 1])  # Adjust 2 for form width
+    with center:
+        st.markdown('<div class="card" style="padding: 2rem;">', unsafe_allow_html=True)
+        st.markdown("#### 🚗 Welcome to Insurance Assistant")
+        st.caption("Enter your details to start chatting with the assistant.")
+
+        with st.form("user_form", clear_on_submit=False):
             name = st.text_input("Name", placeholder="John Doe")
-            car = st.text_input("Car", placeholder="Toyota Corolla")
-        with c2:
             email = st.text_input("Email", placeholder="you@email.com")
-        submitted = st.form_submit_button("Start Chat")
-    st.markdown('</div>', unsafe_allow_html=True)
+            car = st.text_input("Car", placeholder="Toyota Corolla")
+            submitted = st.form_submit_button("Start Chat", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     if submitted:
         if not name or not email or not car:
@@ -244,14 +246,14 @@ if not ss.user_registered:
             st.error(f"Registration failed: {e}")
             st.stop()
 
-        ss.user_registered = True
-        ss.user_name = name
-        ss.user_email = email
-        ss.car = car
+        st.session_state.user_registered = True
+        st.session_state.user_name = name
+        st.session_state.user_email = email
+        st.session_state.car = car
 
         try:
             data = api_history(email)
-            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+            st.session_state.chat_history = data.get("history", []) if isinstance(data, dict) else []
         except Exception as e:
             st.warning(f"Could not load history: {e}")
 
