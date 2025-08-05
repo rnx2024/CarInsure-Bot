@@ -206,22 +206,27 @@ if not ss.user_registered:
         st.stop()
 
 # =========================
-# Navigation (new) or Tabs (fallback)
+# Navigation (fixed)
 # =========================
+
+# 1) Define pages as callables
 def page_chat():
+    # -- your Chat page code --
+    # Greeting
     if ss.user_registered and not ss.greeted:
         with st.chat_message("assistant", avatar="🚗"):
             st.markdown(f"Hi {ss.user_name}, nice to meet you! How can I help you today?")
         ss.greeted = True
 
+    # Quick actions
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("**Quick questions**")
     render_quick_actions()
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # History + input
     if ss.chat_history:
         render_history_list(ss.chat_history)
-
     handle_chat_input()
 
 def page_history():
@@ -242,22 +247,23 @@ def page_settings():
         logout_reset()
     st.markdown('</div>', unsafe_allow_html=True)
 
+# 2) Use st.navigation correctly (Streamlit 1.46+)
 if hasattr(st, "navigation"):
-    # Streamlit 1.46+ path
     pages = {
         "Assistant": [
             st.Page(page_chat, title="Chat", icon=":speech_balloon:"),
             st.Page(page_history, title="History", icon=":bookmark_tabs:"),
         ],
         "Account": [
-            st.Page(page_settings, title="Settings", icon=":gear:")
+            st.Page(page_settings, title="Settings", icon=":gear:"),
         ],
     }
     pg = st.navigation(pages, position="top")
     pg.run()
 else:
-    # Fallback for older Streamlit
+    # 3) Fallback for older versions
     tab_chat, tab_hist, tab_set = st.tabs(["Chat", "History", "Settings"])
     with tab_chat: page_chat()
     with tab_hist: page_history()
     with tab_set: page_settings()
+
