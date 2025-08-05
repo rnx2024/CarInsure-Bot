@@ -252,11 +252,11 @@ if hasattr(st, "navigation"):
     # Use Page objects (functions, not strings)
     pages = {
         "Assistant": [
-            st.Page(page_chat, title="Chat", icon=":speech_balloon:"),
-            st.Page(page_history, title="History", icon=":bookmark_tabs:"),
+            st.Page(page_chat, title="Chat", icon="💬"),
+            st.Page(page_history, title="History", icon="📑"),
         ],
         "Account": [
-            st.Page(page_settings, title="Settings", icon=":gear:"),
+            st.Page(page_settings, title="Settings", icon="⚙️"),
         ],
     }
     nav = st.navigation(pages, position="top")  # position="top" needs 1.46+
