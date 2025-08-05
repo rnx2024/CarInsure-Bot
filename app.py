@@ -3,10 +3,8 @@ import requests
 import streamlit as st
 
 # ----------------- Config -----------------
-API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
-
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
-
+API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
 # ----------------- Custom Styling -----------------
 st.markdown("""
 <style>
