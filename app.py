@@ -104,6 +104,7 @@ ss = st.session_state
 ss.setdefault("user_registered", False)
 ss.setdefault("user_name", "")
 ss.setdefault("user_email", "")
+ss.setdefault("user_last_email", "")  # optional convenience
 ss.setdefault("car", "")
 ss.setdefault("chat_history", [])
 ss.setdefault("greeted", False)
@@ -123,27 +124,33 @@ def render_header():
         """,
         unsafe_allow_html=True
     )
-    # st.divider()  # kept visually minimal via <hr/>
 
 def is_valid_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
 
 def api_register(name: str, email: str, car: str):
-    r = requests.post(f"{API_BASE}/register",
-                      json={"name": name, "email": email, "car": car},
-                      timeout=(CONNECT_TIMEOUT, CONNECT_TIMEOUT))
+    r = requests.post(
+        f"{API_BASE}/register",
+        json={"name": name, "email": email, "car": car},
+        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+    )
     r.raise_for_status()
     return r.json() if r.content else {}
 
 def api_history(email: str):
-    r = requests.get(f"{API_BASE}/history/{email}", timeout=(CONNECT_TIMEOUT, CONNECT_TIMEOUT))
+    r = requests.get(
+        f"{API_BASE}/history/{email}",
+        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+    )
     r.raise_for_status()
     return r.json() if r.content else {}
 
 def api_ask(email: str, message: str):
-    r = requests.post(f"{API_BASE}/ask",
-                      json={"email": email, "message": message},
-                      timeout=(CONNECT_TIMEOUT, READ_TIMEOUT))
+    r = requests.post(
+        f"{API_BASE}/ask",
+        json={"email": email, "message": message},
+        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+    )
     r.raise_for_status()
     return r.json() if r.content else {}
 
@@ -203,7 +210,7 @@ def logout_reset():
     st.rerun()
 
 # =========================
-# Registration Gate
+# Registration / Login (Email-first with fallback)
 # =========================
 st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
 render_header()
@@ -213,128 +220,106 @@ if not ss.user_registered:
     with center:
         st.markdown('<div class="card" style="padding: 2rem;">', unsafe_allow_html=True)
         st.markdown("#### 🚗 Welcome to CarInsure Bot")
+        st.caption("Enter your email to continue. If you're new, we'll ask for a few more details.")
 
-        # If user_name & car already stored, only ask for email
-        if ss.get("user_name") and ss.get("car"):
-            st.caption("Enter your email to continue your session.")
-            with st.form("email_form", clear_on_submit=False):
-                email = st.text_input("Email", placeholder="you@email.com")
-                submitted = st.form_submit_button("Continue", use_container_width=True)
-            if submitted:
-                if not email or not is_valid_email(email):
-                    st.warning("Please enter a valid email address.")
-                    st.stop()
-                ss.user_email = email
+        # Step 1: Email-only attempt
+        with st.form("email_first_form", clear_on_submit=False):
+            email = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
+            email_submit = st.form_submit_button("Continue", use_container_width=True)
+
+        if email_submit:
+            if not is_valid_email(email):
+                st.warning("Please enter a valid email address.")
+            else:
                 try:
-                    data = api_history(email)
+                    data = api_history(email)  # If email exists, this should succeed
+                    ss.user_email = email
+                    ss.user_last_email = email
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                    # We may not have name/car from history; keep them if already in session
+                    ss.user_registered = True
+                    st.rerun()
+                except requests.HTTPError as http_err:
+                    # If backend returns 404/NotFound for unknown email, fall through to full registration
+                    pass
                 except Exception as e:
-                    st.warning(f"Could not load history: {e}")
-                ss.user_registered = True
-                st.rerun()
+                    st.warning(f"Could not verify email: {e}")
 
-        else:
-            st.caption("Enter your details to start chatting with the assistant.")
+        # Step 2: Full registration fallback (only if not registered yet)
+        if not ss.user_registered:
+            st.markdown("---")
+            st.caption("New here? Please register below.")
             with st.form("user_form", clear_on_submit=False):
                 name = st.text_input("Name", placeholder="John Doe")
-                email = st.text_input("Email", placeholder="you@email.com")
+                new_email = st.text_input("Confirm Email", value=email or "", placeholder="you@email.com")
                 car = st.text_input("Car", placeholder="Toyota Corolla")
                 submitted = st.form_submit_button("Start Chat", use_container_width=True)
+
             if submitted:
-                if not name or not email or not car:
+                if not name or not new_email or not car:
                     st.warning("Please complete all fields.")
-                    st.stop()
-                if not is_valid_email(email):
+                elif not is_valid_email(new_email):
                     st.warning("Please enter a valid email address.")
-                    st.stop()
-                try:
-                    api_register(name, email, car)
-                except requests.HTTPError as http_err:
-                    st.error(f"Registration failed: {http_err.response.text}")
-                    st.stop()
-                except Exception as e:
-                    st.error(f"Registration failed: {e}")
-                    st.stop()
-                # Save details in session for next time
-                ss.user_registered = True
-                ss.user_name = name
-                ss.user_email = email
-                ss.car = car
-                try:
-                    data = api_history(email)
-                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                except Exception as e:
-                    st.warning(f"Could not load history: {e}")
-                st.rerun()
+                else:
+                    try:
+                        api_register(name, new_email, car)
+                    except requests.HTTPError as http_err:
+                        st.error(f"Registration failed: {http_err.response.text}")
+                    except Exception as e:
+                        st.error(f"Registration failed: {e}")
+                    else:
+                        ss.user_registered = True
+                        ss.user_name = name
+                        ss.user_email = new_email
+                        ss.user_last_email = new_email
+                        ss.car = car
+                        try:
+                            data = api_history(new_email)
+                            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                        except Exception as e:
+                            st.warning(f"Could not load history: {e}")
+                        st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
 
-def page_chat():
-    # Greeting only once
-    if ss.user_registered and not ss.greeted:
-        with st.chat_message("assistant", avatar="🚗"):
-            st.markdown(f"Hi {ss.user_name}, nice to meet you! How can I help you today?")
-        ss.greeted = True
+    # Close wrappers and return (avoid st.stop before closing wrappers)
+    st.markdown('</div></div>', unsafe_allow_html=True)
+    return  # end early after drawing login/registration card
 
-    # Quick actions
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("**Quick questions**")
-    render_quick_actions()
-    st.markdown('</div>', unsafe_allow_html=True)
+# =========================
+# Main Single-Page UI (inside same centered card)
+# =========================
+# Greeting only once
+if ss.user_registered and not ss.greeted:
+    with st.chat_message("assistant", avatar="🚗"):
+        st.markdown(f"Hi {ss.user_name or ss.user_email}, how can I help you today?")
+    ss.greeted = True
 
-    # Show existing chat (scrollable inside the card)
-    st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
-    if ss.chat_history:
-        render_history_list(ss.chat_history)
-    st.markdown('</div>', unsafe_allow_html=True)
+# Quick actions
+st.markdown('<div class="card">', unsafe_allow_html=True)
+st.markdown("**Quick questions**")
+render_quick_actions()
+st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chat input
-    handle_chat_input()
-
-def page_history():
-    st.markdown("##### Conversation History")
-    st.caption("Your past questions and the assistant’s answers.")
-    st.markdown('<div class="card">', unsafe_allow_html=True)
+# Existing chat (scrollable area)
+st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+if ss.chat_history:
     render_history_list(ss.chat_history)
-    st.markdown('</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
 
-def page_settings():
-    st.markdown("##### Profile & Session")
+# Chat input
+handle_chat_input()
+
+# Optional: simple settings section at the bottom of the card
+with st.expander("⚙️ Settings / Session", expanded=False):
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.write(f"**Name:** {ss.user_name}")
-    st.write(f"**Email:** {ss.user_email}")
-    st.write(f"**Car:** {ss.car}")
+    st.write(f"**Name:** {ss.user_name or '—'}")
+    st.write(f"**Email:** {ss.user_email or '—'}")
+    st.write(f"**Car:** {ss.car or '—'}")
     st.write("")
     if st.button("Log out & reset session", type="primary"):
         logout_reset()
     st.markdown('</div>', unsafe_allow_html=True)
-
-# =========================
-# Navigation (Streamlit 1.46+) with fallback
-# =========================
-if hasattr(st, "navigation"):
-    # Use Page objects (functions, not strings)
-    pages = {
-        "Assistant": [
-            st.Page(page_chat, title="Chat", icon="💬"),
-            st.Page(page_history, title="History", icon="📑"),
-        ],
-        "Account": [
-            st.Page(page_settings, title="Settings", icon="⚙️"),
-        ],
-    }
-    nav = st.navigation(pages, position="top")  # position="top" needs 1.46+
-    nav.run()
-else:
-    # Older Streamlit: fall back to tabs
-    tab_chat, tab_hist, tab_set = st.tabs(["Chat", "History", "Settings"])
-    with tab_chat:
-        page_chat()
-    with tab_hist:
-        page_history()
-    with tab_set:
-        page_settings()
 
 # Close centered wrappers
 st.markdown('</div></div>', unsafe_allow_html=True)
