@@ -88,17 +88,6 @@ ss.setdefault("draft_msg", "")   # used as the default for st.chat_input
 # =========================
 # Helpers
 # =========================
-def render_header():
-    st.markdown(
-        """
-        <div class="app-header">
-            <span style="font-size: 24px;">🚗</span>
-            <h2>Insurance Assistant</h2>
-        </div>
-        <hr/>
-        """,
-        unsafe_allow_html=True
-    )
 
 def is_valid_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
