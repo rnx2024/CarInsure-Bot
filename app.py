@@ -5,8 +5,9 @@ import streamlit as st
 # ----------------- Config -----------------
 st.set_page_config(page_title="Insurance Assistant", page_icon="🚗", layout="wide")
 API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/")
+
 # ----------------- Custom Styling -----------------
-# --- Modern, Sleek, and Centered Styling ---
+
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500&display=swap');
@@ -17,27 +18,7 @@ st.markdown("""
         color: #333;
     }
 
-    /* Container with proper top space for icon/title */
-    .block-container {
-        max-width: 850px;
-        margin: auto;
-        padding-top: 2.5rem; /* enough room for icon/title */
-    }
-
-    /* Title styling */
-    .custom-title {
-        font-size: 1.9rem;
-        font-weight: 500;
-        text-align: center;
-        color: #004080;
-        margin-bottom: 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-    }
-
-    /* Buttons */
+     /* Buttons */
     .stButton>button {
         background-color: #e6f2ff !important;
         color: #004080 !important;
