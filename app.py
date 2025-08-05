@@ -223,7 +223,7 @@ if not st.session_state.user_registered:
     left, center, right = st.columns([1, 2, 1])  # Adjust 2 for form width
     with center:
         st.markdown('<div class="card" style="padding: 2rem;">', unsafe_allow_html=True)
-        st.markdown("#### 🚗 Welcome to Insurance Assistant")
+        st.markdown("#### 🚗 Welcome to CarInsure Bot)
         st.caption("Enter your details to start chatting with the assistant.")
 
         with st.form("user_form", clear_on_submit=False):
