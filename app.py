@@ -11,9 +11,6 @@ API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/
 READ_TIMEOUT = 120
 CONNECT_TIMEOUT = 60
 
-# Theme (choose: "lightblue" or "beige")
-THEME_BG = "lightblue"
-
 # =========================
 # Global Styles
 # =========================
@@ -22,14 +19,12 @@ st.markdown("""
     body, .stApp {
         background: linear-gradient(120deg, #f8fbff, #e4ecf7);
     }
-    /* Outer centered container */
     .app-shell {
         min-height: calc(100vh - 1.5rem);
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    /* Squared card with rounded corners and shadow */
     .app-card {
         width: 800px;
         max-width: 92vw;
@@ -38,7 +33,6 @@ st.markdown("""
         padding: 24px;
         box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
     }
-    /* Header icon + title alignment */
     .app-header {
         display: flex;
         align-items: center;
@@ -49,7 +43,6 @@ st.markdown("""
         margin: 0;
         font-weight: 600;
     }
-    /* Buttons */
     .stButton>button {
         background-color: #1E40AF !important;
         color: #ffffff !important;
@@ -63,12 +56,10 @@ st.markdown("""
     .stButton>button:hover {
         background-color: #2563EB !important;
     }
-    /* Input fields */
     .stTextInput>div>div>input, .stTextArea textarea {
         border-radius: 8px;
         font-size: 16px;
     }
-    /* Scroll area for chat */
     .chat-scroll {
         max-height: 55vh;
         overflow-y: auto;
@@ -77,7 +68,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
 # =========================
 # Session State
 # =========================
@@ -85,27 +75,15 @@ ss = st.session_state
 ss.setdefault("user_registered", False)
 ss.setdefault("user_name", "")
 ss.setdefault("user_email", "")
-ss.setdefault("user_last_email", "")  # optional convenience
+ss.setdefault("user_last_email", "")
 ss.setdefault("car", "")
 ss.setdefault("chat_history", [])
 ss.setdefault("greeted", False)
-ss.setdefault("draft_msg", "")   # used as the default for st.chat_input
+ss.setdefault("draft_msg", "")   # IMPORTANT: will be cleared after send
 
 # =========================
 # Helpers
 # =========================
-def render_header():
-    st.markdown(
-        """
-        <div class="app-header">
-            <span style="font-size: 24px;">🚗</span>
-            <h2>Insurance Assistant</h2>
-        </div>
-        <hr/>
-        """,
-        unsafe_allow_html=True
-    )
-
 def is_valid_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
 
@@ -135,41 +113,6 @@ def api_ask(email: str, message: str):
     r.raise_for_status()
     return r.json() if r.content else {}
 
-def render_quick_actions():
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("📄 Coverage?", help="What does this policy cover?"):
-            ss.draft_msg = "What does this policy cover?"
-    with c2:
-        if st.button("⚠️ Exclusions?", help="What are the exclusions?"):
-            ss.draft_msg = "What are the exclusions in this policy?"
-    with c3:
-        if st.button("❓ Claim Process?", help="How do I make a claim?"):
-            ss.draft_msg = "How do I make a claim under this policy?"
-
-def handle_chat_input():
-    if not ss.user_email:
-        return
-    query = st.chat_input("Type your question...", key="draft_msg")  # bound to session state
-    if not query:
-        return
-
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(query)
-    ss.chat_history.append({"role": "user", "message": query})
-
-    try:
-        resp = api_ask(ss.user_email, query)
-        answer = (resp.get("answer") or "").strip()
-    except requests.HTTPError as http_err:
-        answer = f"Server error: {http_err.response.text}"
-    except Exception as e:
-        answer = f"Error contacting server: {e}"
-
-    with st.chat_message("assistant", avatar="🚗"):
-        st.markdown(answer if answer else "_No answer returned_")
-    ss.chat_history.append({"role": "assistant", "message": answer})
-
 def render_history_list(history):
     if not history:
         st.info("No history yet.")
@@ -183,21 +126,67 @@ def render_history_list(history):
 
 def logout_reset():
     ss.clear()
-    # re-seed minimal keys to avoid KeyError later
     ss["user_registered"] = False
     ss["chat_history"] = []
     ss["greeted"] = False
     ss["draft_msg"] = ""
     st.rerun()
 
+def render_quick_actions():
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("📄 Coverage?", help="What does this policy cover?"):
+            ss.draft_msg = "What does this policy cover?"
+            st.rerun()
+    with c2:
+        if st.button("⚠️ Exclusions?", help="What are the exclusions?"):
+            ss.draft_msg = "What are the exclusions in this policy?"
+            st.rerun()
+    with c3:
+        if st.button("❓ Claim Process?", help="How do I make a claim?"):
+            ss.draft_msg = "How do I make a claim under this policy?"
+            st.rerun()
+
+def handle_chat_input():
+    """Single place where st.chat_input is created and handled."""
+    if not ss.user_email:
+        return
+
+    # Use explicit placeholder=, and key= binds the current value.
+    query = st.chat_input(placeholder="Type your question...", key="draft_msg")
+
+    # If user didn't submit, nothing to do.
+    if not query:
+        return
+
+    # Echo user's message and persist to history
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(query)
+    ss.chat_history.append({"role": "user", "message": query})
+
+    # Call backend
+    try:
+        resp = api_ask(ss.user_email, query)
+        answer = (resp.get("answer") or "").strip()
+    except requests.HTTPError as http_err:
+        answer = f"Server error: {http_err.response.text}"
+    except Exception as e:
+        answer = f"Error contacting server: {e}"
+
+    # Show assistant message and persist
+    with st.chat_message("assistant", avatar="🚗"):
+        st.markdown(answer if answer else "_No answer returned_")
+    ss.chat_history.append({"role": "assistant", "message": answer})
+
+    # CLEAR the input so the placeholder shows again on the next render
+    ss.draft_msg = ""
+    st.rerun()  # single rerun to refresh the input with placeholder
+
 # =========================
 # Registration / Login (Email-first with fallback)
 # =========================
 if not ss.user_registered:
-    # Open centered rounded card
     st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
-
-    # Header
     st.markdown("""
         <div class="app-header">
             <span style="font-size: 24px;">🚗</span>
@@ -205,7 +194,6 @@ if not ss.user_registered:
         </div>
     """, unsafe_allow_html=True)
 
-    # --- Login / Registration UI (inside the card) ---
     with st.form("email_first_form", clear_on_submit=False):
         email = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
         email_submit = st.form_submit_button("Continue", use_container_width=True)
@@ -248,19 +236,14 @@ if not ss.user_registered:
             except Exception as e:
                 st.error(f"Registration failed: {e}")
 
-    # Close card wrapper and stop rendering this page
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-     
 # =========================
-# Main Single-Page UI (inside same centered card)
+# Main Single-Page UI
 # =========================
-# Greeting only once
-# Open the centered card
 st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
 
-# Header
 st.markdown("""
     <div class="app-header">
         <span style="font-size: 24px;">🚗</span>
@@ -274,26 +257,18 @@ if ss.chat_history:
     render_history_list(ss.chat_history)
 st.markdown('</div>', unsafe_allow_html=True)  # close chat scroll
 
-# Chat input and other card content here...
+# Optional quick actions (prefill input, not placeholder)
+render_quick_actions()
+
+# Chat input (single call + proper placeholder behavior)
 handle_chat_input()
 
-# Close the card
-st.markdown('</div></div>', unsafe_allow_html=True)
-
-
-# Chat input
-handle_chat_input()
-
-# Optional: simple settings section at the bottom of the card
+# Optional: settings section
 with st.expander("⚙️ Settings / Session", expanded=False):
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.write(f"**Name:** {ss.user_name or '—'}")
     st.write(f"**Email:** {ss.user_email or '—'}")
     st.write(f"**Car:** {ss.car or '—'}")
-    st.write("")
     if st.button("Log out & reset session", type="primary"):
         logout_reset()
-    st.markdown('</div>', unsafe_allow_html=True)
 
-# Close centered wrappers
 st.markdown('</div></div>', unsafe_allow_html=True)
