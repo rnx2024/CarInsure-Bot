@@ -11,61 +11,86 @@ API_BASE = os.getenv("API_BASE", "https://carinsure-bot.onrender.com").rstrip("/
 READ_TIMEOUT = 120
 CONNECT_TIMEOUT = 60
 
+# Theme (choose: "lightblue" or "beige")
+THEME_BG = "lightblue"
+
 # =========================
 # Global Styles
 # =========================
-st.markdown("""
-    <style>
-    body, .stApp {
-        background: linear-gradient(120deg, #f8fbff, #e4ecf7);
-    }
-    .app-shell {
-        min-height: calc(100vh - 1.5rem);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    .app-card {
-        width: 800px;
-        max-width: 92vw;
-        background-color: white;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
-    }
-    .app-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 1rem;
-    }
-    .app-header h2 {
-        margin: 0;
-        font-weight: 600;
-    }
-    .stButton>button {
-        background-color: #1E40AF !important;
-        color: #ffffff !important;
-        padding: 0.6rem 1.2rem;
-        font-size: 14px !important;
-        font-weight: 600 !important;
-        border-radius: 8px !important;
-        border: none !important;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-    }
-    .stButton>button:hover {
-        background-color: #2563EB !important;
-    }
-    .stTextInput>div>div>input, .stTextArea textarea {
-        border-radius: 8px;
-        font-size: 16px;
-    }
-    .chat-scroll {
-        max-height: 55vh;
-        overflow-y: auto;
-        padding-right: 4px;
-    }
-    </style>
+st.markdown(f"""
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap');
+
+  :root {{
+    --bg-lightblue: #eaf4ff;
+    --bg-beige:     #f7f1e3;
+    --card-bg: #ffffff;
+    --text: #1f2937;
+    --border: #e5e7eb;
+  }}
+
+  html, body, [class*="css"] {{
+      font-family: 'Rubik', sans-serif;
+      background-color: {{'var(--bg-lightblue)' if THEME_BG == 'lightblue' else 'var(--bg-beige)'}};
+      color: var(--text);
+  }}
+
+  .main .block-container {{
+      max-width: 1200px;
+      padding-top: 0.5rem !important;
+      padding-bottom: 0.5rem !important;
+  }}
+
+  .app-shell {{
+      min-height: calc(100vh - 1.5rem);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+  }}
+
+  .app-card {{
+      width: 800px;
+      max-width: 92vw;
+      min-height: 70vh;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.08);
+      padding: 16px 18px;
+  }}
+
+  .app-header {{ display: flex; align-items: center; gap: 10px; margin: 2px 0 10px 0; }}
+  .app-header h2 {{ margin: 0; padding: 0; font-weight: 600; }}
+
+  .card {{
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+  }}
+
+  .stButton>button {{
+      background-color: #e6f2ff !important;
+      color: #004080 !important;
+      border-radius: 8px;
+      padding: 0.45rem 0.9rem;
+      font-weight: 500;
+      border: 1px solid #cfe3ff;
+  }}
+  .stButton>button:hover {{ filter: brightness(0.98); }}
+
+  .stChatMessageContent {{ font-size: 0.98rem; }}
+  .stTextInput>div>div>input, .stTextArea textarea {{ border-radius: 8px; }}
+
+  .chat-scroll {{
+      max-height: 55vh;
+      overflow-y: auto;
+      padding-right: 4px;
+  }}
+
+  hr {{ margin: 8px 0 !important; }}
+</style>
 """, unsafe_allow_html=True)
 
 # =========================
@@ -79,11 +104,23 @@ ss.setdefault("user_last_email", "")
 ss.setdefault("car", "")
 ss.setdefault("chat_history", [])
 ss.setdefault("greeted", False)
-ss.setdefault("draft_msg", "")   # IMPORTANT: will be cleared after send
+ss.setdefault("draft_msg", "")   # used as the default for st.chat_input
 
 # =========================
 # Helpers
 # =========================
+def render_header():
+    st.markdown(
+        """
+        <div class="app-header">
+            <span style="font-size: 24px;">🚗</span>
+            <h2>Insurance Assistant</h2>
+        </div>
+        <hr/>
+        """,
+        unsafe_allow_html=True
+    )
+
 def is_valid_email(value: str) -> bool:
     return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", value or ""))
 
@@ -113,6 +150,41 @@ def api_ask(email: str, message: str):
     r.raise_for_status()
     return r.json() if r.content else {}
 
+def render_quick_actions():
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("📄 Coverage?", help="What does this policy cover?"):
+            ss.draft_msg = "What does this policy cover?"
+    with c2:
+        if st.button("⚠️ Exclusions?", help="What are the exclusions?"):
+            ss.draft_msg = "What are the exclusions in this policy?"
+    with c3:
+        if st.button("❓ Claim Process?", help="How do I make a claim?"):
+            ss.draft_msg = "How do I make a claim under this policy?"
+
+def handle_chat_input():
+    if not ss.user_email:
+        return
+    query = st.chat_input("Type your question...", key="draft_msg")
+    if not query:
+        return
+
+    with st.chat_message("user", avatar="👤"):
+        st.markdown(query)
+    ss.chat_history.append({"role": "user", "message": query})
+
+    try:
+        resp = api_ask(ss.user_email, query)
+        answer = (resp.get("answer") or "").strip()
+    except requests.HTTPError as http_err:
+        answer = f"Server error: {http_err.response.text}"
+    except Exception as e:
+        answer = f"Error contacting server: {e}"
+
+    with st.chat_message("assistant", avatar="🚗"):
+        st.markdown(answer if answer else "_No answer returned_")
+    ss.chat_history.append({"role": "assistant", "message": answer})
+
 def render_history_list(history):
     if not history:
         st.info("No history yet.")
@@ -132,143 +204,161 @@ def logout_reset():
     ss["draft_msg"] = ""
     st.rerun()
 
-def render_quick_actions():
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("📄 Coverage?", help="What does this policy cover?"):
-            ss.draft_msg = "What does this policy cover?"
-            st.rerun()
-    with c2:
-        if st.button("⚠️ Exclusions?", help="What are the exclusions?"):
-            ss.draft_msg = "What are the exclusions in this policy?"
-            st.rerun()
-    with c3:
-        if st.button("❓ Claim Process?", help="How do I make a claim?"):
-            ss.draft_msg = "How do I make a claim under this policy?"
-            st.rerun()
-
-def handle_chat_input():
-    """Single place where st.chat_input is created and handled."""
-    if not ss.user_email:
-        return
-
-    # Use explicit placeholder=, and key= binds the current value.
-    query = st.chat_input(placeholder="Type your question...", key="draft_msg")
-
-    # If user didn't submit, nothing to do.
-    if not query:
-        return
-
-    # Echo user's message and persist to history
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(query)
-    ss.chat_history.append({"role": "user", "message": query})
-
-    # Call backend
-    try:
-        resp = api_ask(ss.user_email, query)
-        answer = (resp.get("answer") or "").strip()
-    except requests.HTTPError as http_err:
-        answer = f"Server error: {http_err.response.text}"
-    except Exception as e:
-        answer = f"Error contacting server: {e}"
-
-    # Show assistant message and persist
-    with st.chat_message("assistant", avatar="🚗"):
-        st.markdown(answer if answer else "_No answer returned_")
-    ss.chat_history.append({"role": "assistant", "message": answer})
-
-    # CLEAR the input so the placeholder shows again on the next render
-    ss.draft_msg = ""
-    st.rerun()  # single rerun to refresh the input with placeholder
-
 # =========================
-# Registration / Login (Email-first with fallback)
+# Registration / Login Gate (two options)
 # =========================
+st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
+render_header()
+
 if not ss.user_registered:
-    st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
-    st.markdown("""
-        <div class="app-header">
-            <span style="font-size: 24px;">🚗</span>
-            <h2>Insurance Assistant</h2>
-        </div>
-    """, unsafe_allow_html=True)
+    left, center, right = st.columns([1, 2, 1])
+    with center:
+        st.markdown('<div class="card" style="padding: 1.25rem;">', unsafe_allow_html=True)
+        st.markdown("#### 🚗 Welcome to CarInsure Bot")
+        st.caption("Choose an option to continue.")
 
-    with st.form("email_first_form", clear_on_submit=False):
-        email = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
-        email_submit = st.form_submit_button("Continue", use_container_width=True)
-    if email_submit and is_valid_email(email):
-        try:
-            data = api_history(email)
-            ss.user_email = email
-            ss.user_last_email = email
-            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-            ss.user_registered = True
-            st.rerun()
-        except requests.HTTPError:
-            pass
-        except Exception as e:
-            st.warning(f"Could not verify email: {e}")
+        # Two clear options via tabs
+        tab_new, tab_return = st.tabs(["I’m new (Register)", "I’ve used this before (Email Login)"])
 
-    if not ss.user_registered:
-        st.markdown("---")
-        with st.form("user_form", clear_on_submit=False):
-            name = st.text_input("Name", placeholder="John Doe")
-            new_email = st.text_input("Confirm Email", value=email or "", placeholder="you@email.com")
-            car = st.text_input("Car", placeholder="Toyota Corolla")
-            submitted = st.form_submit_button("Start Chat", use_container_width=True)
-        if submitted and name and car and is_valid_email(new_email):
-            try:
-                api_register(name, new_email, car)
+        # --- New user: one-time registration ---
+        with tab_new:
+            with st.form("form_register", clear_on_submit=False):
+                name = st.text_input("Name", placeholder="John Doe")
+                email_reg = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
+                car = st.text_input("Car", placeholder="Toyota Corolla")
+                submit_reg = st.form_submit_button("Create account & start chatting", use_container_width=True)
+
+            if submit_reg:
+                if not name or not email_reg or not car:
+                    st.warning("Please complete all fields.")
+                    st.stop()
+                if not is_valid_email(email_reg):
+                    st.warning("Please enter a valid email address.")
+                    st.stop()
+                try:
+                    api_register(name, email_reg, car)
+                except requests.HTTPError as http_err:
+                    st.error(f"Registration failed: {http_err.response.text}")
+                    st.stop()
+                except Exception as e:
+                    st.error(f"Registration failed: {e}")
+                    st.stop()
+
+                # Set session and pre-load history (if any)
                 ss.user_registered = True
                 ss.user_name = name
-                ss.user_email = new_email
-                ss.user_last_email = new_email
+                ss.user_email = email_reg
+                ss.user_last_email = email_reg
                 ss.car = car
                 try:
-                    data = api_history(new_email)
+                    data = api_history(email_reg)
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
                 except Exception as e:
                     st.warning(f"Could not load history: {e}")
                 st.rerun()
-            except requests.HTTPError as http_err:
-                st.error(f"Registration failed: {http_err.response.text}")
-            except Exception as e:
-                st.error(f"Registration failed: {e}")
 
+        # --- Returning user: email-only login ---
+        with tab_return:
+            with st.form("form_login", clear_on_submit=False):
+                email_login = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
+                submit_login = st.form_submit_button("Continue", use_container_width=True)
+
+            if submit_login:
+                if not is_valid_email(email_login):
+                    st.warning("Please enter a valid email address.")
+                    st.stop()
+                # Try to fetch history; if 404 or empty, still allow login but warn.
+                try:
+                    data = api_history(email_login)
+                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                except requests.HTTPError as http_err:
+                    # If backend returns 404 for unknown email, prompt to register
+                    code = getattr(http_err.response, "status_code", None)
+                    if code == 404:
+                        st.error("Email not found. Please register under the 'I’m new' tab.")
+                        st.stop()
+                    else:
+                        st.error(f"Login failed: {http_err.response.text}")
+                        st.stop()
+                except Exception as e:
+                    st.warning(f"Could not verify email: {e}")
+                    # Allow proceeding without history if backend is reachable later
+
+                ss.user_registered = True
+                ss.user_email = email_login
+                ss.user_last_email = email_login
+                # Name/car might not be returned by /history; keep previous values if any
+                st.rerun()
+
+    # Stop after the gate
+    st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
 # =========================
 # Main Single-Page UI
 # =========================
-st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
+def page_chat():
+    if ss.user_registered and not ss.greeted:
+        with st.chat_message("assistant", avatar="🚗"):
+            greeting_name = ss.user_name or "there"
+            st.markdown(f"Hi {greeting_name}, how can I help you today?")
+        ss.greeted = True
 
-st.markdown("""
-    <div class="app-header">
-        <span style="font-size: 24px;">🚗</span>
-        <h2>Insurance Assistant</h2>
-    </div>
-""", unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("**Quick questions**")
+    render_quick_actions()
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Existing chat (scrollable area inside the card)
-st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
-if ss.chat_history:
+    st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+    if ss.chat_history:
+        render_history_list(ss.chat_history)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    handle_chat_input()
+
+def page_history():
+    st.markdown("##### Conversation History")
+    st.caption("Your past questions and the assistant’s answers.")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     render_history_list(ss.chat_history)
-st.markdown('</div>', unsafe_allow_html=True)  # close chat scroll
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# Optional quick actions (prefill input, not placeholder)
-render_quick_actions()
-
-# Chat input (single call + proper placeholder behavior)
-handle_chat_input()
-
-# Optional: settings section
-with st.expander("⚙️ Settings / Session", expanded=False):
+def page_settings():
+    st.markdown("##### Profile & Session")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.write(f"**Name:** {ss.user_name or '—'}")
     st.write(f"**Email:** {ss.user_email or '—'}")
     st.write(f"**Car:** {ss.car or '—'}")
+    st.write("")
     if st.button("Log out & reset session", type="primary"):
         logout_reset()
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Wrapper
+st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
+render_header()
+
+# Navigation (Streamlit 1.46+) with fallback
+if hasattr(st, "navigation"):
+    pages = {
+        "Assistant": [
+            st.Page(page_chat, title="Chat", icon="💬"),
+            st.Page(page_history, title="History", icon="📑"),
+        ],
+        "Account": [
+            st.Page(page_settings, title="Settings", icon="⚙️"),
+        ],
+    }
+    nav = st.navigation(pages, position="top")
+    nav.run()
+else:
+    tab_chat, tab_hist, tab_set = st.tabs(["Chat", "History", "Settings"])
+    with tab_chat:
+        page_chat()
+    with tab_hist:
+        page_history()
+    with tab_set:
+        page_settings()
 
 st.markdown('</div></div>', unsafe_allow_html=True)
