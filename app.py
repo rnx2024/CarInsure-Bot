@@ -35,17 +35,18 @@ st.markdown(f"""
       color: var(--text);
   }}
 
+  /* Remove large default padding at top/bottom */
   .main .block-container {{
       max-width: 1200px;
-      padding-top: 0.5rem !important;
-      padding-bottom: 0.5rem !important;
+      padding-top: 0rem !important;
+      padding-bottom: 0rem !important;
   }}
 
+  /* Position card near top instead of vertical centering */
   .app-shell {{
-      min-height: calc(100vh - 1.5rem);
       display: flex;
-      align-items: center;
       justify-content: center;
+      margin-top: 1rem; /* adjust smaller if needed */
   }}
 
   .app-card {{
@@ -92,6 +93,7 @@ st.markdown(f"""
   hr {{ margin: 8px 0 !important; }}
 </style>
 """, unsafe_allow_html=True)
+
 
 # =========================
 # Session State
