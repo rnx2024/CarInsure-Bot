@@ -49,29 +49,6 @@ st.markdown(f"""
       margin-top: 0.5rem;   /* tweak as you like */
   }}
 
-  /* Let the card size to content (no forced tall empty area) */
-  .app-card {{
-      width: 800px;
-      max-width: 92vw;
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      box-shadow: 0 18px 50px rgba(0,0,0,0.08);
-      padding: 16px 18px;
-      min-height: auto;     /* was 70vh — remove it */
-  }}
-
-  .app-header {{ display: flex; align-items: center; gap: 10px; margin: 2px 0 10px 0; }}
-  .app-header h2 {{ margin: 0; padding: 0; font-weight: 600; }}
-
-  .card {{
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 18px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
-  }}
-
   .stButton>button {{
       background-color: #e6f2ff !important;
       color: #004080 !important;
