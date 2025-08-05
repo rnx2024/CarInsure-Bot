@@ -175,8 +175,6 @@ def logout_reset():
 # =========================
 # Registration / Login Gate (two options)
 # =========================
-st.markdown('<div class="app-shell"><div class="app-card">', unsafe_allow_html=True)
-render_header()
 
 if not ss.user_registered:
     left, center, right = st.columns([1, 2, 1])
