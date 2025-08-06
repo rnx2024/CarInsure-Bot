@@ -179,7 +179,6 @@ def logout_reset():
 if not ss.user_registered:
     left, center, right = st.columns([1, 2, 1])
     with center:
-        st.markdown('<div class="card" style="padding: 1.25rem;">', unsafe_allow_html=True)
         st.markdown("#### 🚗 Welcome to CarInsure Bot")
         st.caption("Choose an option to continue.")
 
@@ -199,10 +198,8 @@ if not ss.user_registered:
                 submit_reg = st.form_submit_button("Create account & start chatting", use_container_width=True)
 
             if submit_reg:
-                # Normalize
                 email_norm = (email_reg or "").strip().lower()
 
-                # Basic validations
                 if not name or not email_norm or not car:
                     st.warning("Please complete all fields.")
                     st.stop()
@@ -210,17 +207,15 @@ if not ss.user_registered:
                     st.warning("Please enter a valid email address.")
                     st.stop()
 
-                # Call backend /register which now returns 409 if email already exists
                 try:
+                    # Backend now returns 409 if email already exists
                     api_register(name.strip(), email_norm, car.strip())
                 except requests.HTTPError as http_err:
                     status = getattr(http_err.response, "status_code", None)
                     if status == 409:
-                        # Mirror backend: duplicate email
-                        st.error("This email is already registered. Please log in under the “I’ve used this before (Email Login)” tab.")
+                        st.error("This email is already registered. Please use the 'I’ve used this before' tab to log in.")
                         st.stop()
                     else:
-                        # Other backend errors
                         detail = http_err.response.text if getattr(http_err, "response", None) else str(http_err)
                         st.error(f"Registration failed: {detail}")
                         st.stop()
@@ -228,60 +223,59 @@ if not ss.user_registered:
                     st.error(f"Registration failed: {e}")
                     st.stop()
 
-                # Success: set session and preload (may be empty) history
+                # Success
                 ss.user_registered = True
                 ss.user_name = name.strip()
                 ss.user_email = email_norm
                 ss.user_last_email = email_norm
                 ss.car = car.strip()
                 try:
-                    data = api_history(email_norm)  # 200 for existing user (even with no chats)
+                    data = api_history(email_norm)  # 200 even if no chats
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
                 except Exception as e:
                     st.warning(f"Could not load history: {e}")
                 st.rerun()
 
-             # --- Returning user: email-only login ---
-with tab_return:
-    with st.form("form_login", clear_on_submit=False):
-        email_login = st.text_input(
-            "Email",
-            value=ss.get("user_last_email", ""),
-            placeholder="you@email.com"
-        )
-        submit_login = st.form_submit_button("Continue", use_container_width=True)
+        # --- Returning user: email-only login (blocks if not registered) ---
+        with tab_return:
+            with st.form("form_login", clear_on_submit=False):
+                email_login = st.text_input(
+                    "Email",
+                    value=ss.get("user_last_email", ""),
+                    placeholder="you@email.com"
+                )
+                submit_login = st.form_submit_button("Continue", use_container_width=True)
 
-    if submit_login:
-        if not is_valid_email(email_login):
-            st.warning("Please enter a valid email address.")
-            st.stop()
+            if submit_login:
+                email_login_norm = (email_login or "").strip().lower()
 
-        try:
-            # Must return 404 if user not found
-            data = api_history(email_login)
-            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-        except requests.HTTPError as http_err:
-            code = getattr(http_err.response, "status_code", None)
-            if code == 404:
-                st.error("Email not found. Please register under the 'I’m new' tab.")
-                st.stop()
-            else:
-                st.error(f"Login failed: {http_err.response.text}")
-                st.stop()
-        except Exception as e:
-            st.error(f"Error verifying email: {e}")
-            st.stop()
+                if not is_valid_email(email_login_norm):
+                    st.warning("Please enter a valid email address.")
+                    st.stop()
 
-        # If we reach here, email exists in backend
-        ss.user_registered = True
-        ss.user_email = email_login
-        ss.user_last_email = email_login
-        st.rerun()
+                try:
+                    # Must return 404 if user not found
+                    data = api_history(email_login_norm)
+                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                except requests.HTTPError as http_err:
+                    code = getattr(http_err.response, "status_code", None)
+                    if code == 404:
+                        st.error("Email not found. Please register under the 'I’m new' tab.")
+                        st.stop()
+                    else:
+                        st.error(f"Login failed: {http_err.response.text}")
+                        st.stop()
+                except Exception as e:
+                    st.error(f"Error verifying email: {e}")
+                    st.stop()
 
+                # Email exists -> allow login
+                ss.user_registered = True
+                ss.user_email = email_login_norm
+                ss.user_last_email = email_login_norm
+                st.rerun()
 
-    # Stop after the gate
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown('</div></div>', unsafe_allow_html=True)
+    # Stop after the gate so the main UI doesn't render
     st.stop()
 
 # =========================
