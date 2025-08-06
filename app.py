@@ -176,13 +176,24 @@ def logout_reset():
 # Registration / Login Gate (two options)
 # =========================
 
+# =========================
+# Registration / Login Gate (render both tabs first; handle actions after)
+# =========================
 if not ss.user_registered:
     left, center, right = st.columns([1, 2, 1])
     with center:
         st.markdown("#### 🚗 Welcome to CarInsure Bot")
         st.caption("Choose an option to continue.")
 
-        # Two clear options via tabs
+        # Prepare variables so we can process after both tabs render
+        submit_reg = False
+        submit_login = False
+        # Defaults to avoid UnboundLocalError
+        name = ""
+        email_reg = ""
+        car = ""
+        email_login = ""
+
         tab_new, tab_return = st.tabs(["I’m new (Register)", "I’ve used this before (Email Login)"])
 
         # --- New user: one-time registration ---
@@ -197,46 +208,7 @@ if not ss.user_registered:
                 car = st.text_input("Car", placeholder="Toyota Corolla")
                 submit_reg = st.form_submit_button("Create account & start chatting", use_container_width=True)
 
-            if submit_reg:
-                email_norm = (email_reg or "").strip().lower()
-
-                if not name or not email_norm or not car:
-                    st.warning("Please complete all fields.")
-                    st.stop()
-                if not is_valid_email(email_norm):
-                    st.warning("Please enter a valid email address.")
-                    st.stop()
-
-                try:
-                    # Backend now returns 409 if email already exists
-                    api_register(name.strip(), email_norm, car.strip())
-                except requests.HTTPError as http_err:
-                    status = getattr(http_err.response, "status_code", None)
-                    if status == 409:
-                        st.error("This email is already registered. Please use the 'I’ve used this before' tab to log in.")
-                        st.stop()
-                    else:
-                        detail = http_err.response.text if getattr(http_err, "response", None) else str(http_err)
-                        st.error(f"Registration failed: {detail}")
-                        st.stop()
-                except Exception as e:
-                    st.error(f"Registration failed: {e}")
-                    st.stop()
-
-                # Success
-                ss.user_registered = True
-                ss.user_name = name.strip()
-                ss.user_email = email_norm
-                ss.user_last_email = email_norm
-                ss.car = car.strip()
-                try:
-                    data = api_history(email_norm)  # 200 even if no chats
-                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                except Exception as e:
-                    st.warning(f"Could not load history: {e}")
-                st.rerun()
-
-        # --- Returning user: email-only login (blocks if not registered) ---
+        # --- Returning user: email-only login ---
         with tab_return:
             with st.form("form_login", clear_on_submit=False):
                 email_login = st.text_input(
@@ -246,37 +218,68 @@ if not ss.user_registered:
                 )
                 submit_login = st.form_submit_button("Continue", use_container_width=True)
 
-            if submit_login:
-                email_login_norm = (email_login or "").strip().lower()
-
-                if not is_valid_email(email_login_norm):
-                    st.warning("Please enter a valid email address.")
-                    st.stop()
-
+        # ---- Handle actions AFTER both tabs are rendered ----
+        # Registration flow
+        if submit_reg:
+            email_norm = (email_reg or "").strip().lower()
+            if not name or not email_norm or not car:
+                st.warning("Please complete all fields.")
+            elif not is_valid_email(email_norm):
+                st.warning("Please enter a valid email address.")
+            else:
                 try:
-                    # Must return 404 if user not found
+                    # Backend returns 409 if email already exists
+                    api_register(name.strip(), email_norm, car.strip())
+                except requests.HTTPError as http_err:
+                    status = getattr(http_err.response, "status_code", None)
+                    if status == 409:
+                        st.error("This email is already registered. Please use the “I’ve used this before (Email Login)” tab.")
+                    else:
+                        detail = http_err.response.text if getattr(http_err, "response", None) else str(http_err)
+                        st.error(f"Registration failed: {detail}")
+                except Exception as e:
+                    st.error(f"Registration failed: {e}")
+                else:
+                    # Success
+                    ss.user_registered = True
+                    ss.user_name = name.strip()
+                    ss.user_email = email_norm
+                    ss.user_last_email = email_norm
+                    ss.car = car.strip()
+                    try:
+                        data = api_history(email_norm)  # 200 even if no chats
+                        ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+                    except Exception as e:
+                        st.warning(f"Could not load history: {e}")
+                    st.rerun()
+
+        # Login flow
+        if submit_login:
+            email_login_norm = (email_login or "").strip().lower()
+            if not is_valid_email(email_login_norm):
+                st.warning("Please enter a valid email address.")
+            else:
+                try:
+                    # Backend must return 404 if user not found
                     data = api_history(email_login_norm)
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
                 except requests.HTTPError as http_err:
                     code = getattr(http_err.response, "status_code", None)
                     if code == 404:
                         st.error("Email not found. Please register under the 'I’m new' tab.")
-                        st.stop()
                     else:
                         st.error(f"Login failed: {http_err.response.text}")
-                        st.stop()
                 except Exception as e:
                     st.error(f"Error verifying email: {e}")
-                    st.stop()
+                else:
+                    ss.user_registered = True
+                    ss.user_email = email_login_norm
+                    ss.user_last_email = email_login_norm
+                    st.rerun()
 
-                # Email exists -> allow login
-                ss.user_registered = True
-                ss.user_email = email_login_norm
-                ss.user_last_email = email_login_norm
-                st.rerun()
-
-    # Stop after the gate so the main UI doesn't render
+    # Final guard: user not registered yet -> stop before main UI
     st.stop()
+
 
 # =========================
 # Main Single-Page UI
