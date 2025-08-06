@@ -224,37 +224,43 @@ if not ss.user_registered:
                 st.rerun()
 
         # --- Returning user: email-only login ---
-        with tab_return:
-            with st.form("form_login", clear_on_submit=False):
-                email_login = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
-                submit_login = st.form_submit_button("Continue", use_container_width=True)
+        # --- Returning user: email-only login ---
+with tab_return:
+    with st.form("form_login", clear_on_submit=False):
+        email_login = st.text_input(
+            "Email",
+            value=ss.get("user_last_email", ""),
+            placeholder="you@email.com"
+        )
+        submit_login = st.form_submit_button("Continue", use_container_width=True)
 
-            if submit_login:
-                if not is_valid_email(email_login):
-                    st.warning("Please enter a valid email address.")
-                    st.stop()
-                # Try to fetch history; if 404 or empty, still allow login but warn.
-                try:
-                    data = api_history(email_login)
-                    ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
-                except requests.HTTPError as http_err:
-                    # If backend returns 404 for unknown email, prompt to register
-                    code = getattr(http_err.response, "status_code", None)
-                    if code == 404:
-                        st.error("Email not found. Please register.")
-                        st.stop()
-                    else:
-                        st.error(f"Login failed: {http_err.response.text}")
-                        st.stop()
-                except Exception as e:
-                    st.warning(f"Could not verify email: {e}")
-                    # Allow proceeding without history if backend is reachable later
+    if submit_login:
+        if not is_valid_email(email_login):
+            st.warning("Please enter a valid email address.")
+            st.stop()
 
-                ss.user_registered = True
-                ss.user_email = email_login
-                ss.user_last_email = email_login
-                # Name/car might not be returned by /history; keep previous values if any
-                st.rerun()
+        try:
+            # Must return 404 if user not found
+            data = api_history(email_login)
+            ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
+        except requests.HTTPError as http_err:
+            code = getattr(http_err.response, "status_code", None)
+            if code == 404:
+                st.error("Email not found. Please register under the 'I’m new' tab.")
+                st.stop()
+            else:
+                st.error(f"Login failed: {http_err.response.text}")
+                st.stop()
+        except Exception as e:
+            st.error(f"Error verifying email: {e}")
+            st.stop()
+
+        # If we reach here, email exists in backend
+        ss.user_registered = True
+        ss.user_email = email_login
+        ss.user_last_email = email_login
+        st.rerun()
+
 
     # Stop after the gate
     st.markdown('</div>', unsafe_allow_html=True)
