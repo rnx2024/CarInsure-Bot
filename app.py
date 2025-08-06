@@ -190,41 +190,58 @@ if not ss.user_registered:
         with tab_new:
             with st.form("form_register", clear_on_submit=False):
                 name = st.text_input("Name", placeholder="John Doe")
-                email_reg = st.text_input("Email", value=ss.get("user_last_email", ""), placeholder="you@email.com")
+                email_reg = st.text_input(
+                    "Email",
+                    value=(ss.get("user_last_email", "") or ""),
+                    placeholder="you@email.com"
+                )
                 car = st.text_input("Car", placeholder="Toyota Corolla")
                 submit_reg = st.form_submit_button("Create account & start chatting", use_container_width=True)
 
             if submit_reg:
-                if not name or not email_reg or not car:
+                # Normalize
+                email_norm = (email_reg or "").strip().lower()
+
+                # Basic validations
+                if not name or not email_norm or not car:
                     st.warning("Please complete all fields.")
                     st.stop()
-                if not is_valid_email(email_reg):
+                if not is_valid_email(email_norm):
                     st.warning("Please enter a valid email address.")
                     st.stop()
+
+                # Call backend /register which now returns 409 if email already exists
                 try:
-                    api_register(name, email_reg, car)
+                    api_register(name.strip(), email_norm, car.strip())
                 except requests.HTTPError as http_err:
-                    st.error(f"Registration failed: {http_err.response.text}")
-                    st.stop()
+                    status = getattr(http_err.response, "status_code", None)
+                    if status == 409:
+                        # Mirror backend: duplicate email
+                        st.error("This email is already registered. Please log in under the “I’ve used this before (Email Login)” tab.")
+                        st.stop()
+                    else:
+                        # Other backend errors
+                        detail = http_err.response.text if getattr(http_err, "response", None) else str(http_err)
+                        st.error(f"Registration failed: {detail}")
+                        st.stop()
                 except Exception as e:
                     st.error(f"Registration failed: {e}")
                     st.stop()
 
-                # Set session and pre-load history (if any)
+                # Success: set session and preload (may be empty) history
                 ss.user_registered = True
-                ss.user_name = name
-                ss.user_email = email_reg
-                ss.user_last_email = email_reg
-                ss.car = car
+                ss.user_name = name.strip()
+                ss.user_email = email_norm
+                ss.user_last_email = email_norm
+                ss.car = car.strip()
                 try:
-                    data = api_history(email_reg)
+                    data = api_history(email_norm)  # 200 for existing user (even with no chats)
                     ss.chat_history = data.get("history", []) if isinstance(data, dict) else []
                 except Exception as e:
                     st.warning(f"Could not load history: {e}")
                 st.rerun()
 
-        # --- Returning user: email-only login ---
-        # --- Returning user: email-only login ---
+             # --- Returning user: email-only login ---
 with tab_return:
     with st.form("form_login", clear_on_submit=False):
         email_login = st.text_input(
