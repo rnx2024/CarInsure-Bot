@@ -32,8 +32,8 @@
 ### 1. Clone the Repo
 
 ```
-git clone https://github.com/rnx2024/LlamaIndex.git
-cd LlamaIndex
+git clone https://github.com/rnx2024/CarInsure-Bot-LlamaIndex.git
+cd CarInsure-Bot-LlamaIndex
 ```
 **2. Install Requirements**
 ```
