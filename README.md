@@ -73,8 +73,3 @@ streamlit run app.py
 5. How do I update my policy information?
 ```
 **Note:** Chat history is saved per user using their email, and reloaded for better context.
-
-📄 License
-MIT — free to use, modify, and share. Attribution is highly encouraged.
-
-_**Developed by rnx2024 **_
